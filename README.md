@@ -101,8 +101,8 @@ Set `PLAN_REVIEW_SKIP=1` to temporarily disable the hook.
 | `Enter` | Toggle expand/collapse |
 | `Tab` | Switch focus between panes |
 | `c` | Add/edit comment |
-| `d` | Toggle delete mark |
-| `a` | Toggle approve mark |
+| `v` | Toggle viewed mark |
+| `/` | Search steps |
 | `s` | Submit review and exit |
 | `q` / `Ctrl+C` | Quit |
 | `?` | Show help |
@@ -111,24 +111,34 @@ Set `PLAN_REVIEW_SKIP=1` to temporarily disable the hook.
 
 | Key | Action |
 |-----|--------|
+| `Tab` | Cycle comment label |
 | `Ctrl+S` | Save comment |
 | `Esc` | Cancel |
 
+### Search Mode
+
+| Key | Action |
+|-----|--------|
+| Type text | Incremental filter |
+| `j` / `k` | Navigate results |
+| `Enter` | Confirm search |
+| `Esc` | Cancel search |
+
 ## Review Output Format
 
-The review output generated on submit:
+The review output generated on submit uses [Conventional Comments](https://conventionalcomments.org/) labels:
 
 ```markdown
 # Plan Review
 
-## S1.1: JWT verification [modify]
+## S1.1: JWT verification [suggestion]
 Switch to HS256. Load the key from an environment variable.
 
-## S2: Update routing [delete]
+## S2: Update routing [issue]
 Not needed; the existing implementation covers this.
 
-## S3: Add tests [approve]
-Looks good as is.
+## S3: Add tests [question]
+Is the coverage target 80% or 90%?
 ```
 
-Action types: `modify` (default), `delete`, `approve`, `insert-after`, `insert-before`
+Labels: `suggestion` (default), `issue`, `question`, `nitpick`, `todo`, `thought`, `note`, `praise`, `chore`

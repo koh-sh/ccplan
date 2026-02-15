@@ -345,7 +345,7 @@ stdinからhookのJSON入力を受け取り、内部で以下を実行:
 > **Stop hookではなくPostToolUseを使う理由**: Claude Codeのplanモードでは
 > Stop hookが発火しないバグがある。PostToolUse (Write|Edit) はplanモードでも
 > 正常に動作し、プランファイルへのWrite/Edit直後にレビューを起動できる。
-> また、ユーザーがTUIでapprove/cancelを選ぶことでループを制御できるため、
+> また、ユーザーがTUIでコメントなしsubmit/cancelを選ぶことでループを制御できるため、
 > 無限ループ防止のための特別な仕組みが不要になる。
 
 #### Claude Code設定
@@ -457,7 +457,7 @@ func RunHook(stdin io.Reader) error {
 
 PostToolUseでは無限ループ防止の特別な仕組みは不要。理由:
 
-1. **ユーザー制御**: TUIでapprove/cancel（exit 0）を選べばループは停止する。
+1. **ユーザー制御**: TUIでコメントなしsubmit/cancel（exit 0）を選べばループは停止する。
    submit（exit 2）を選んだ場合のみClaudeがプランを修正し、再度Write/Editで発火する。
 2. **環境変数**: `PLAN_REVIEW_SKIP=1` でhookを一時的に無効化可能。
 
@@ -560,8 +560,8 @@ func Parse(source []byte) (*Plan, error) {
 │                              │ ────────────────────────────────── │
 │                              │                                      │
 ├──────────────────────────────┴──────────────────────────────────────┤
-│ [j/k] navigate  [enter] toggle  [c] comment  [d] delete  [q] quit │
-│ [tab] switch pane  [s] submit review  [?] help                     │
+│ [j/k] navigate  [enter] toggle  [c] comment  [v] viewed  [q] quit │
+│ [/] search  [s] submit review  [tab] switch pane  [?] help        │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -571,7 +571,7 @@ func Parse(source []byte) (*Plan, error) {
 - タイトル直下に "Overview" エントリ（Plan.Preamble に対応。選択すると右ペインにpreamble表示）
 - その下にツリー形式でステップ群を表示（見出しレベルに基づくインデント）
 - 折りたたみ / 展開（Enter or ← →）
-- 各ステップのバッジ：`[*]` コメントあり、`[del]` 削除マーク、`[ok]` approve済み
+- 各ステップのバッジ：`[*]` コメントあり、`[✓]` viewed済み
 - 依存関係のインジケータ（例: `S2 ← S1`）（Phase 3）
 - カーソル移動: `j`/`k` or ↑/↓
 - 実装: bubbles/list の Delegate パターンを参考に自作。bubbles/list そのものは
@@ -590,11 +590,8 @@ func Parse(source []byte) (*Plan, error) {
 
 - `c` キーで開始、textarea ウィジェットで複数行入力
 - `Esc` でキャンセル、`Ctrl+S` で確定
-- アクションタイプ（プレフィックス、省略時は modify）：
-  - `modify:` — 修正指示（デフォルト）
-  - `delete:` — ステップ削除を要求
-  - `approve:` — 明示的に承認
-  - `insert-after:` / `insert-before:` — 新ステップ追加を要求
+- `Tab` でConventional Commentsラベルをサイクル切替
+- ラベル: `suggestion` (デフォルト), `issue`, `question`, `nitpick`, `todo`, `thought`, `note`, `praise`, `chore`
 
 ### 出力
 
@@ -605,18 +602,14 @@ func Parse(source []byte) (*Plan, error) {
 
 以下のレビューコメントに基づいてプランを修正してください。
 
-## S1.1: JWT検証 [modify]
+## S1.1: JWT検証 [suggestion]
 HS256に変更。鍵は環境変数 `JWT_SECRET` から読み込む方式にして。
 
-## S2: ルーティング更新 [delete]
+## S2: ルーティング更新 [issue]
 既存のルーティング実装で対応可能なため、このステップは不要。
 
-## S2.1: エンドポイント追加 [insert-after]
-Rate limiterをミドルウェアとして追加するステップを入れて。
-Token bucket方式で、設定値はconfigから読む。
-
-## S3: テスト追加 [approve]
-このままでOK。
+## S3: テスト追加 [question]
+カバレッジ目標は80%と90%のどちら？
 ```
 
 > フォーマット: `## {StepID}: {StepTitle} [{ActionType}]`
@@ -638,7 +631,7 @@ Token bucket方式で、設定値はconfigから読む。
 | ステータス | 意味 | hookの動作 |
 |-----------|------|-----------|
 | `submitted` | レビューをsubmitした | レビューファイルを読んで exit 2 |
-| `approved` | 全ステップapprove（コメントなし） | exit 0（続行） |
+| `approved` | コメントなし | exit 0（続行） |
 | `cancelled` | `q` で中断した | exit 0（何もしない） |
 
 ### キーバインド一覧
@@ -652,10 +645,12 @@ Token bucket方式で、設定値はconfigから読む。
 | `←` / `h` | ステップ一覧 | 折りたたみ |
 | `Tab` | 全体 | 左ペイン ↔ 右ペインのフォーカス切り替え |
 | `c` | ステップ選択中 | コメント入力モードを開始 |
-| `d` | ステップ選択中 | 削除マークをトグル |
-| `a` | ステップ選択中 | approveマークをトグル |
+| `v` | ステップ選択中 | viewedマークをトグル |
+| `/` | ステップ一覧 | 検索モードを開始 |
+| `Tab` | コメント入力中 | ラベルをサイクル切替 |
 | `Ctrl+S` | コメント入力中 | コメントを確定 |
-| `Esc` | コメント入力中 | コメント入力をキャンセル |
+| `Esc` | コメント入力中 / 検索中 | キャンセル |
+| `Enter` | 検索中 | 検索を確定 |
 | `s` | 全体 | レビューをsubmit（出力して終了） |
 | `q` / `Ctrl+C` | 全体 | 終了（未保存コメントがあれば確認） |
 | `?` | 全体 | ヘルプ表示 |
@@ -669,7 +664,7 @@ Token bucket方式で、設定値はconfigから読む。
 | hookイベント | 検討結果 |
 |-------------|---------|
 | Stop | planモードでは発火しないバグがある（Claude Codeの承認待ち状態がStopとみなされない）。 |
-| **PostToolUse (Write\|Edit)** ✅ | planモードでも正常に発火。`tool_input.file_path` でプランファイルを直接判定可。exit 2でフィードバック注入。ユーザーがTUIでapprove/cancelを選ぶことでループを制御。Claudeはプラン作成時にWrite、修正時にEditを使用。 |
+| **PostToolUse (Write\|Edit)** ✅ | planモードでも正常に発火。`tool_input.file_path` でプランファイルを直接判定可。exit 2でフィードバック注入。ユーザーがTUIでコメントなしsubmit/cancelを選ぶことでループを制御。Claudeはプラン作成時にWrite、修正時にEditを使用。 |
 | Notification | フィードバックをClaudeに戻す仕組みがない。 |
 
 ### 動作フロー
@@ -843,11 +838,15 @@ type ReviewComment struct {
 type ActionType string
 
 const (
-    ActionModify      ActionType = "modify"       // デフォルト
-    ActionDelete      ActionType = "delete"
-    ActionApprove     ActionType = "approve"
-    ActionInsertAfter ActionType = "insert-after"
-    ActionInsertBefore ActionType = "insert-before"
+    ActionSuggestion ActionType = "suggestion" // デフォルト
+    ActionIssue      ActionType = "issue"
+    ActionQuestion   ActionType = "question"
+    ActionNitpick    ActionType = "nitpick"
+    ActionTodo       ActionType = "todo"
+    ActionThought    ActionType = "thought"
+    ActionNote       ActionType = "note"
+    ActionPraise     ActionType = "praise"
+    ActionChore      ActionType = "chore"
 )
 
 // ReviewResult はレビュー全体の結果
@@ -861,7 +860,7 @@ type Status string
 
 const (
     StatusSubmitted Status = "submitted" // コメントあり
-    StatusApproved  Status = "approved"  // コメントなし（全ステップ未操作 or 全approve）
+    StatusApproved  Status = "approved"  // コメントなし
     StatusCancelled Status = "cancelled" // q で中断
 )
 ```
@@ -871,7 +870,7 @@ const (
 | ユーザー操作 | Status | 理由 |
 |-------------|--------|------|
 | `s` を押してsubmit、コメントが1つ以上ある | `submitted` | フィードバックがある |
-| `s` を押してsubmit、コメントが0件（何も操作しなかった or 全てapproveのみ） | `approved` | 修正不要の意思表示 |
+| `s` を押してsubmit、コメントが0件 | `approved` | 修正不要の意思表示 |
 | `q` / `Ctrl+C` で中断 | `cancelled` | レビュー中断 |
 
 ---
@@ -888,6 +887,7 @@ const (
     ModeComment                 // コメント入力中（textareaにフォーカス）
     ModeConfirm                 // 確認ダイアログ（未保存コメントがある状態で q を押した等）
     ModeHelp                    // ヘルプオーバーレイ表示中
+    ModeSearch                  // ステップ検索（インクリメンタルフィルタ）
 )
 ```
 
@@ -965,18 +965,26 @@ ModeComment:
 
 | 操作 | 方法 |
 |------|------|
-| 新規作成 | `c` キーでtextareaを開いて入力、`Ctrl+S` で確定 |
-| 編集 | 既にコメントがあるステップで `c` → 既存コメントがtextareaにプリフィルされた状態で編集 |
+| 新規作成 | `c` キーでtextareaを開いて入力、`Tab` でラベル切替、`Ctrl+S` で確定 |
+| 編集 | 既にコメントがあるステップで `c` → 既存コメントとラベルがプリフィルされた状態で編集 |
 | 削除 | 既にコメントがあるステップで `c` → テキストを全消去して `Ctrl+S` |
-| 削除マーク | `d` キー → ActionType = delete のコメントを自動作成（本文は空。textareaは開かない） |
-| approveマーク | `a` キー → ActionType = approve のコメントを自動作成（本文は空） |
-| マーク解除 | 既にdelete/approveマークがあるステップで再度 `d`/`a` → マーク解除（コメント削除） |
+| viewed マーク | `v` キー → ステップを確認済みとしてマーク（レビュー出力には含まれない） |
 
-### `d` / `a` キーと `c` キーの関係
+### Conventional Comments ラベル
 
-- `d` で削除マーク → その後 `c` で理由テキストを追加可能（ActionTypeはdeleteのまま）
-- `c` でmodifyコメント入力済み → `d` を押すと ActionType が delete に変更、本文は保持
-- `a` でapproveマーク → `c` で本文追加可能（「LGTMだけどここ注意」のようなケース）
+コメント入力時に `Tab` キーで以下のラベルをサイクル切替:
+
+| ラベル | 用途 |
+|--------|------|
+| `suggestion` (デフォルト) | 改善提案 |
+| `issue` | 具体的な問題の指摘 |
+| `question` | 質問・確認 |
+| `nitpick` | 些細な好みの問題 |
+| `todo` | 必要な小さな変更 |
+| `thought` | アイデア・参考情報 |
+| `note` | 情報の強調 |
+| `praise` | ポジティブな点 |
+| `chore` | 受け入れ前に必要な作業 |
 
 ---
 
