@@ -67,7 +67,10 @@ func TestViewFitsTerminalHeight(t *testing.T) {
 
 			// Simulate window size message
 			model, _ := app.Update(tea.WindowSizeMsg{Width: sz.width, Height: sz.height})
-			a := model.(*App)
+			a, ok := model.(*App)
+			if !ok {
+				t.Fatalf("model type = %T, want *App", model)
+			}
 
 			view := a.View()
 			lines := countLines(view)
@@ -84,7 +87,10 @@ func TestViewFitsInCommentMode(t *testing.T) {
 	app := NewApp(p, AppOptions{})
 
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
-	a := model.(*App)
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
 
 	// Move to a step and enter comment mode
 	a.stepList.CursorDown() // move to first step
@@ -104,7 +110,10 @@ func TestViewFitsInConfirmMode(t *testing.T) {
 	app := NewApp(p, AppOptions{})
 
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
-	a := model.(*App)
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
 
 	a.mode = ModeConfirm
 
@@ -121,7 +130,10 @@ func TestStepListScrollsWithCursor(t *testing.T) {
 	app := NewApp(p, AppOptions{})
 
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
-	a := model.(*App)
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
 
 	// Move cursor down past the visible area
 	for range 25 {
@@ -150,7 +162,10 @@ func TestGGGoesToTop(t *testing.T) {
 	app := NewApp(p, AppOptions{})
 
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
-	a := model.(*App)
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
 
 	// Move cursor down several steps
 	for range 5 {
@@ -177,7 +192,10 @@ func TestShiftGGoesToBottom(t *testing.T) {
 	app := NewApp(p, AppOptions{})
 
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
-	a := model.(*App)
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
 
 	// Send 'G' (Shift+G)
 	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'G'}})
@@ -196,7 +214,10 @@ func TestPendingGResetOnOtherKey(t *testing.T) {
 	app := NewApp(p, AppOptions{})
 
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
-	a := model.(*App)
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
 
 	// Send 'g' then 'j' (not a gg chord)
 	a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}})
@@ -217,25 +238,24 @@ func TestPendingGResetOnOtherKey(t *testing.T) {
 
 func TestTruncateCJK(t *testing.T) {
 	tests := []struct {
-		name  string
-		input string
-		max   int
-		want  bool // true if result width should be <= max
+		name     string
+		input    string
+		maxWidth int
 	}{
-		{"ascii fits", "hello", 10, true},
-		{"ascii truncate", "hello world", 8, true},
-		{"cjk fits", "テスト", 6, true},
-		{"cjk truncate", "テスト計画の概要", 8, true},
-		{"mixed", "Step テスト", 8, true},
-		{"zero max", "hello", 0, true},
+		{"ascii fits", "hello", 10},
+		{"ascii truncate", "hello world", 8},
+		{"cjk fits", "テスト", 6},
+		{"cjk truncate", "テスト計画の概要", 8},
+		{"mixed", "Step テスト", 8},
+		{"zero max", "hello", 0},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := truncate(tt.input, tt.max)
+			got := truncate(tt.input, tt.maxWidth)
 			w := lipglossWidth(got)
-			if tt.want && w > tt.max {
-				t.Errorf("truncate(%q, %d) = %q (width %d), exceeds max",
-					tt.input, tt.max, got, w)
+			if w > tt.maxWidth {
+				t.Errorf("truncate(%q, %d) = %q (width %d), exceeds maxWidth",
+					tt.input, tt.maxWidth, got, w)
 			}
 		})
 	}
@@ -251,7 +271,10 @@ func TestViewFitsInHelpMode(t *testing.T) {
 	app := NewApp(p, AppOptions{})
 
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
-	a := model.(*App)
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
 
 	a.mode = ModeHelp
 
@@ -260,5 +283,1047 @@ func TestViewFitsInHelpMode(t *testing.T) {
 
 	if lines > 30 {
 		t.Errorf("View() in help mode has %d lines, exceeds terminal height 30", lines)
+	}
+}
+
+// initApp creates an App with a standard window size for testing.
+func initApp(t *testing.T, p *plan.Plan) *App {
+	t.Helper()
+	app := NewApp(p, AppOptions{})
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
+	return a
+}
+
+func keyMsg(s string) tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
+}
+
+func TestInit(t *testing.T) {
+	app := NewApp(makeLargePlan(3, 0), AppOptions{})
+	if app.Init() != nil {
+		t.Error("Init() should return nil")
+	}
+}
+
+func TestResult(t *testing.T) {
+	app := NewApp(makeLargePlan(3, 0), AppOptions{})
+	result := app.Result()
+	if result.Status != plan.StatusCancelled {
+		t.Errorf("initial status = %s, want cancelled", result.Status)
+	}
+}
+
+func TestQuitNoComments(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	_, cmd := a.Update(keyMsg("q"))
+	if a.mode != ModeNormal {
+		t.Error("should stay in normal mode")
+	}
+	if a.result.Status != plan.StatusCancelled {
+		t.Errorf("status = %s, want cancelled", a.result.Status)
+	}
+	if cmd == nil {
+		t.Error("should return quit command")
+	}
+}
+
+func TestQuitWithComments(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "test"})
+
+	a.Update(keyMsg("q"))
+	if a.mode != ModeConfirm {
+		t.Errorf("mode = %d, want ModeConfirm", a.mode)
+	}
+}
+
+func TestHelpModeToggle(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("?"))
+	if a.mode != ModeHelp {
+		t.Errorf("mode = %d, want ModeHelp", a.mode)
+	}
+
+	// Esc exits help
+	a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal after Esc", a.mode)
+	}
+}
+
+func TestHelpModeQ(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.mode = ModeHelp
+
+	a.Update(keyMsg("q"))
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal after q in help", a.mode)
+	}
+}
+
+func TestHelpModeQuestion(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.mode = ModeHelp
+
+	a.Update(keyMsg("?"))
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal after ? in help", a.mode)
+	}
+}
+
+func TestTabSwitchFocus(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	if a.focus != FocusLeft {
+		t.Fatal("initial focus should be left")
+	}
+
+	a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if a.focus != FocusRight {
+		t.Error("after Tab, focus should be right")
+	}
+
+	a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if a.focus != FocusLeft {
+		t.Error("after second Tab, focus should be left")
+	}
+}
+
+func TestSubmitNoComments(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	_, cmd := a.Update(keyMsg("s"))
+	if a.result.Status != plan.StatusApproved {
+		t.Errorf("status = %s, want approved", a.result.Status)
+	}
+	if cmd == nil {
+		t.Error("should return quit command")
+	}
+}
+
+func TestSubmitWithComments(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "feedback"})
+
+	_, cmd := a.Update(keyMsg("s"))
+	if a.result.Status != plan.StatusSubmitted {
+		t.Errorf("status = %s, want submitted", a.result.Status)
+	}
+	if a.result.Review == nil {
+		t.Error("review should not be nil")
+	}
+	if cmd == nil {
+		t.Error("should return quit command")
+	}
+}
+
+func TestLeftPaneUpDown(t *testing.T) {
+	a := initApp(t, makeLargePlan(5, 0))
+
+	// Move down from overview to S1
+	a.Update(keyMsg("j"))
+	if a.stepList.Selected() == nil || a.stepList.Selected().ID != "S1" {
+		t.Error("j should move to S1")
+	}
+
+	// Move down again
+	a.Update(keyMsg("j"))
+	if a.stepList.Selected().ID != "S2" {
+		t.Error("j should move to S2")
+	}
+
+	// Move up
+	a.Update(keyMsg("k"))
+	if a.stepList.Selected().ID != "S1" {
+		t.Error("k should move back to S1")
+	}
+}
+
+func TestLeftPaneToggle(t *testing.T) {
+	p := makeLargePlan(3, 2)
+	a := initApp(t, p)
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	// S1 should be collapsed
+	for _, item := range a.stepList.items {
+		if item.Step != nil && item.Step.ID == "S1" && item.Expanded {
+			t.Error("S1 should be collapsed after enter")
+		}
+	}
+}
+
+func TestLeftPaneExpandCollapse(t *testing.T) {
+	p := makeLargePlan(3, 2)
+	a := initApp(t, p)
+
+	a.Update(keyMsg("j")) // S1
+
+	// Collapse with h
+	a.Update(keyMsg("h"))
+	for _, item := range a.stepList.items {
+		if item.Step != nil && item.Step.ID == "S1" && item.Expanded {
+			t.Error("S1 should be collapsed after h")
+		}
+	}
+
+	// Expand with l
+	a.Update(keyMsg("l"))
+	for _, item := range a.stepList.items {
+		if item.Step != nil && item.Step.ID == "S1" && !item.Expanded {
+			t.Error("S1 should be expanded after l")
+		}
+	}
+}
+
+func TestLeftPaneComment(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("c"))
+	if a.mode != ModeComment {
+		t.Errorf("mode = %d, want ModeComment", a.mode)
+	}
+	if a.comment.StepID() != "S1" {
+		t.Errorf("comment stepID = %s, want S1", a.comment.StepID())
+	}
+}
+
+func TestLeftPaneCommentOnOverview(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	// On overview, c should do nothing
+	a.Update(keyMsg("c"))
+	if a.mode != ModeNormal {
+		t.Error("c on overview should not enter comment mode")
+	}
+}
+
+func TestLeftPaneCommentList(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("j")) // S1
+
+	// No comments, C should not enter comment list
+	a.Update(keyMsg("C"))
+	if a.mode != ModeNormal {
+		t.Error("C with no comments should stay in normal mode")
+	}
+
+	// Add comment, then C should work
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "test"})
+	a.Update(keyMsg("C"))
+	if a.mode != ModeCommentList {
+		t.Errorf("mode = %d, want ModeCommentList", a.mode)
+	}
+}
+
+func TestLeftPaneViewed(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("v"))
+
+	if !a.stepList.IsViewed("S1") {
+		t.Error("S1 should be viewed after v")
+	}
+}
+
+func TestLeftPaneSearch(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("/"))
+	if a.mode != ModeSearch {
+		t.Errorf("mode = %d, want ModeSearch", a.mode)
+	}
+}
+
+func TestCommentModeCtrlS(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("c"))
+
+	// Type something
+	a.comment.textarea.SetValue("my comment")
+
+	// Save
+	a.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal after Ctrl+S", a.mode)
+	}
+	comments := a.stepList.GetComments("S1")
+	if len(comments) != 1 {
+		t.Fatalf("comments count = %d, want 1", len(comments))
+	}
+	if comments[0].Body != "my comment" {
+		t.Errorf("body = %s, want 'my comment'", comments[0].Body)
+	}
+}
+
+func TestCommentModeCtrlSEdit(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.stepList.AddComment("S1", &plan.ReviewComment{StepID: "S1", Action: plan.ActionSuggestion, Body: "original"})
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("C")) // comment list
+	a.Update(keyMsg("e")) // edit
+
+	if a.mode != ModeComment {
+		t.Fatalf("mode = %d, want ModeComment", a.mode)
+	}
+
+	a.comment.textarea.SetValue("edited")
+	a.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+
+	if a.mode != ModeCommentList {
+		t.Errorf("mode = %d, want ModeCommentList after edit save", a.mode)
+	}
+	comments := a.stepList.GetComments("S1")
+	if len(comments) != 1 || comments[0].Body != "edited" {
+		t.Errorf("comment not updated properly")
+	}
+}
+
+func TestCommentModeEsc(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("c"))
+	a.comment.textarea.SetValue("will cancel")
+
+	a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal after Esc", a.mode)
+	}
+	if len(a.stepList.GetComments("S1")) != 0 {
+		t.Error("cancelled comment should not be saved")
+	}
+}
+
+func TestCommentModeEscFromEdit(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.stepList.AddComment("S1", &plan.ReviewComment{StepID: "S1", Body: "original"})
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("C")) // comment list
+	a.Update(keyMsg("e")) // edit
+
+	a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if a.mode != ModeCommentList {
+		t.Errorf("mode = %d, want ModeCommentList after Esc from edit", a.mode)
+	}
+}
+
+func TestCommentModeTab(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("c"))
+
+	initial := a.comment.Label()
+	a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if a.comment.Label() == initial {
+		t.Error("Tab should cycle label")
+	}
+}
+
+func TestCommentListModeEsc(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "test"})
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("C"))
+
+	a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal", a.mode)
+	}
+}
+
+func TestCommentListModeNav(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "first"})
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "second"})
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("C"))
+
+	if a.commentList.Cursor() != 0 {
+		t.Fatal("cursor should start at 0")
+	}
+
+	a.Update(keyMsg("j"))
+	if a.commentList.Cursor() != 1 {
+		t.Errorf("cursor = %d, want 1", a.commentList.Cursor())
+	}
+
+	a.Update(keyMsg("k"))
+	if a.commentList.Cursor() != 0 {
+		t.Errorf("cursor = %d, want 0", a.commentList.Cursor())
+	}
+}
+
+func TestCommentListModeDelete(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "only"})
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("C"))
+	a.Update(keyMsg("d"))
+
+	// Last comment deleted -> back to normal mode
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal after deleting last comment", a.mode)
+	}
+	if len(a.stepList.GetComments("S1")) != 0 {
+		t.Error("comment should be deleted")
+	}
+}
+
+func TestCommentListModeDeleteWithRemaining(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "first"})
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "second"})
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("C"))
+	a.Update(keyMsg("d"))
+
+	// Remaining comments -> stay in comment list
+	if a.mode != ModeCommentList {
+		t.Errorf("mode = %d, want ModeCommentList", a.mode)
+	}
+	if len(a.stepList.GetComments("S1")) != 1 {
+		t.Error("should have 1 remaining comment")
+	}
+}
+
+func TestConfirmModeYes(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "test"})
+	a.mode = ModeConfirm
+
+	_, cmd := a.Update(keyMsg("y"))
+	if a.result.Status != plan.StatusCancelled {
+		t.Errorf("status = %s, want cancelled", a.result.Status)
+	}
+	if cmd == nil {
+		t.Error("should return quit command")
+	}
+}
+
+func TestConfirmModeNo(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.mode = ModeConfirm
+
+	a.Update(keyMsg("n"))
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal", a.mode)
+	}
+}
+
+func TestConfirmModeEsc(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.mode = ModeConfirm
+
+	a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal", a.mode)
+	}
+}
+
+func TestSearchModeEnter(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("/"))
+	a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal after Enter", a.mode)
+	}
+}
+
+func TestSearchModeEsc(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("/"))
+	a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal after Esc", a.mode)
+	}
+	// All items should be visible
+	for _, item := range a.stepList.items {
+		if !item.Visible {
+			t.Error("all items should be visible after search cancel")
+		}
+	}
+}
+
+func TestRightPaneScroll(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(tea.KeyMsg{Type: tea.KeyTab}) // switch to right pane
+	if a.focus != FocusRight {
+		t.Fatal("focus should be right after Tab")
+	}
+
+	before := a.detail.viewport.YOffset
+	a.Update(keyMsg("j"))
+	afterDown := a.detail.viewport.YOffset
+	if afterDown < before {
+		t.Error("j in right pane should not scroll up")
+	}
+
+	a.Update(keyMsg("k"))
+	afterUp := a.detail.viewport.YOffset
+	if afterUp > afterDown {
+		t.Error("k in right pane should not scroll down")
+	}
+}
+
+func TestViewNotReady(t *testing.T) {
+	app := NewApp(makeLargePlan(3, 0), AppOptions{})
+	view := app.View()
+	if view != "Loading..." {
+		t.Errorf("view before ready = %q, want 'Loading...'", view)
+	}
+}
+
+func TestSinglePaneMode(t *testing.T) {
+	app := NewApp(makeLargePlan(3, 0), AppOptions{})
+
+	// Width < 80 triggers single pane mode
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
+
+	view := a.View()
+	if view == "" {
+		t.Error("view should not be empty in single pane mode")
+	}
+}
+
+func TestRenderStatusBarModes(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	// Normal mode
+	sb := a.renderStatusBar()
+	if !strings.Contains(sb, "navigate") {
+		t.Error("normal mode status bar should contain 'navigate'")
+	}
+
+	// Comment mode
+	a.mode = ModeComment
+	sb = a.renderStatusBar()
+	if !strings.Contains(sb, "save") {
+		t.Error("comment mode status bar should contain 'save'")
+	}
+
+	// Comment list mode
+	a.mode = ModeCommentList
+	sb = a.renderStatusBar()
+	if !strings.Contains(sb, "edit") {
+		t.Error("comment list mode status bar should contain 'edit'")
+	}
+
+	// Search mode
+	a.mode = ModeSearch
+	sb = a.renderStatusBar()
+	// Search bar view is rendered
+	if sb == "" {
+		t.Error("search mode status bar should not be empty")
+	}
+}
+
+func TestRenderTitleBar(t *testing.T) {
+	t.Run("with title and filepath", func(t *testing.T) {
+		a := initApp(t, makeLargePlan(3, 0))
+		a.opts.FilePath = "test.md"
+		tb := a.renderTitleBar()
+		if !strings.Contains(tb, "test.md") {
+			t.Error("title bar should contain filepath")
+		}
+	})
+
+	t.Run("no title no filepath", func(t *testing.T) {
+		p := &plan.Plan{Steps: []*plan.Step{{ID: "S1", Title: "Step", Level: 2}}}
+		a := initApp(t, p)
+		tb := a.renderTitleBar()
+		if tb != "" {
+			t.Error("title bar should be empty when no title and no filepath")
+		}
+	})
+
+	t.Run("zero width", func(t *testing.T) {
+		app := NewApp(makeLargePlan(3, 0), AppOptions{})
+		tb := app.renderTitleBar()
+		if tb != "" {
+			t.Error("title bar should be empty when width is 0")
+		}
+	})
+}
+
+func TestCtrlCInConfirm(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.mode = ModeConfirm
+
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if a.result.Status != plan.StatusCancelled {
+		t.Errorf("status = %s, want cancelled", a.result.Status)
+	}
+	if cmd == nil {
+		t.Error("should return quit command")
+	}
+}
+
+func TestGGInRightPane(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.focus = FocusRight
+
+	// gg in right pane should call GotoTop on viewport
+	a.Update(keyMsg("g"))
+	a.Update(keyMsg("g"))
+	if a.detail.viewport.YOffset != 0 {
+		t.Errorf("gg in right pane should scroll to top, YOffset = %d", a.detail.viewport.YOffset)
+	}
+}
+
+func TestGInRightPane(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.focus = FocusRight
+
+	// G in right pane should call GotoBottom on viewport
+	a.Update(keyMsg("G"))
+	if a.focus != FocusRight {
+		t.Error("focus should remain on right pane after G")
+	}
+	// YOffset should be at or near the bottom (>= 0 means viewport was updated)
+	if a.detail.viewport.YOffset < 0 {
+		t.Errorf("G in right pane should not result in negative YOffset, got %d", a.detail.viewport.YOffset)
+	}
+}
+
+func TestRenderRightContentModes(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	// Normal mode
+	content := a.renderRightContent(80, 20)
+	if content == "" {
+		t.Error("right content should not be empty in normal mode")
+	}
+
+	// Comment mode
+	a.stepList.CursorDown()
+	a.comment.Open("S1", nil)
+	a.mode = ModeComment
+	content = a.renderRightContent(80, 20)
+	if !strings.Contains(content, "Comment") {
+		t.Error("right content in comment mode should contain 'Comment'")
+	}
+
+	// Comment list mode
+	a.mode = ModeCommentList
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "test"})
+	a.commentList.Open("S1", a.stepList.GetComments("S1"))
+	content = a.renderRightContent(80, 20)
+	if content == "" {
+		t.Error("right content in comment list mode should not be empty")
+	}
+}
+
+func TestSearchModeNavigation(t *testing.T) {
+	a := initApp(t, makeLargePlan(5, 0))
+
+	a.Update(keyMsg("/"))
+	if a.mode != ModeSearch {
+		t.Fatal("should be in search mode")
+	}
+
+	// Navigate with j/k in search mode
+	a.Update(keyMsg("j"))
+	a.Update(keyMsg("k"))
+	// No crash and still in search mode
+	if a.mode != ModeSearch {
+		t.Error("should still be in search mode after j/k")
+	}
+}
+
+func TestSearchModeTextInput(t *testing.T) {
+	a := initApp(t, makeLargePlan(5, 0))
+
+	a.Update(keyMsg("/"))
+
+	// Send a character to the search bar - this triggers the text input update path
+	// and the FilterByQuery call
+	a.search.input.SetValue("Step 3")
+	// Manually trigger the filter as SetValue doesn't go through Update
+	a.stepList.FilterByQuery(a.search.Query())
+
+	// Verify filter was applied
+	found := false
+	for _, item := range a.stepList.items {
+		if item.Step != nil && item.Step.ID == "S3" && item.Visible {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("S3 should be visible after searching 'Step 3'")
+	}
+}
+
+// testMsg is a custom message type for testing non-key, non-window message handling.
+type testMsg struct{}
+
+func TestUpdateNonKeyMsgInCommentMode(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("c")) // enter comment mode
+
+	// Send a non-key, non-window message to exercise comment.Update path
+	a.Update(testMsg{})
+	if a.mode != ModeComment {
+		t.Error("should stay in comment mode after custom msg")
+	}
+}
+
+func TestUpdateNonKeyMsgInSearchMode(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("/")) // enter search mode
+
+	// Send a non-key, non-window message to exercise search.Update path
+	a.Update(testMsg{})
+	if a.mode != ModeSearch {
+		t.Error("should stay in search mode after custom msg")
+	}
+}
+
+func TestUpdateNonKeyMsgInNormalMode(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	// Send a non-key, non-window message in normal mode
+	model, cmd := a.Update(testMsg{})
+	if model != a {
+		t.Error("should return same model")
+	}
+	if cmd != nil {
+		t.Error("should return nil cmd")
+	}
+}
+
+func TestSinglePaneFocusRight(t *testing.T) {
+	app := NewApp(makeLargePlan(3, 0), AppOptions{})
+
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
+	a.focus = FocusRight
+
+	view := a.View()
+	if view == "" {
+		t.Error("view should not be empty in single pane right focus")
+	}
+}
+
+func TestHelpModeEnter(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.mode = ModeHelp
+
+	a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal after enter in help", a.mode)
+	}
+}
+
+func TestConfirmModeCapitalY(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.mode = ModeConfirm
+
+	_, cmd := a.Update(keyMsg("Y"))
+	if a.result.Status != plan.StatusCancelled {
+		t.Errorf("status = %s, want cancelled", a.result.Status)
+	}
+	if cmd == nil {
+		t.Error("should return quit command")
+	}
+}
+
+func TestConfirmModeCapitalN(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.mode = ModeConfirm
+
+	a.Update(keyMsg("N"))
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal after N", a.mode)
+	}
+}
+
+func TestContentHeight(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	h := a.contentHeight()
+	if h < 1 {
+		t.Errorf("contentHeight = %d, should be >= 1", h)
+	}
+}
+
+func TestLeftRightWidth(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	lw := a.leftWidth()
+	rw := a.rightWidth()
+	if lw <= 0 || rw <= 0 {
+		t.Errorf("leftWidth=%d, rightWidth=%d, both should be > 0", lw, rw)
+	}
+
+	// Single pane mode
+	a.width = 60
+	lw = a.leftWidth()
+	if lw != 58 { // 60 - 2
+		t.Errorf("leftWidth in single pane = %d, want 58", lw)
+	}
+}
+
+func TestHandleKeyUnknownMode(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.mode = AppMode(99) // unknown mode
+
+	model, _ := a.Update(keyMsg("j"))
+	if model != a {
+		t.Error("should return same model for unknown mode")
+	}
+}
+
+func TestUpdateLayoutFirstTime(t *testing.T) {
+	// Test the path where detail is nil (first updateLayout call)
+	app := NewApp(makeLargePlan(3, 0), AppOptions{})
+	app.width = 120
+	app.height = 30
+	app.detail = nil
+	app.updateLayout()
+	if app.detail == nil {
+		t.Error("detail should be created after updateLayout")
+	}
+}
+
+func TestRefreshDetailNilDetail(t *testing.T) {
+	app := NewApp(makeLargePlan(3, 0), AppOptions{})
+	app.detail = nil
+	app.refreshDetail()
+	if app.detail != nil {
+		t.Error("refreshDetail should not create detail when it is nil")
+	}
+}
+
+func TestSinglePaneTitleBar(t *testing.T) {
+	// Single pane with title bar and focus right
+	app := NewApp(makeLargePlan(3, 0), AppOptions{FilePath: "test.md"})
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
+
+	// Left focus with title
+	view := a.View()
+	if view == "" {
+		t.Error("view should not be empty")
+	}
+
+	// Right focus with title
+	a.focus = FocusRight
+	view = a.View()
+	if view == "" {
+		t.Error("view should not be empty in right focus")
+	}
+}
+
+func TestCommentModeCtrlSEmptyBody(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("c"))
+
+	// Don't type anything (empty comment)
+	a.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal", a.mode)
+	}
+	// Empty comment should not be saved
+	if len(a.stepList.GetComments("S1")) != 0 {
+		t.Error("empty comment should not be saved")
+	}
+}
+
+func TestCommentModeRegularKey(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("c")) // enter comment mode
+
+	// Regular key should fall through to comment.Update(msg)
+	a.Update(keyMsg("a"))
+	if a.mode != ModeComment {
+		t.Error("should stay in comment mode after regular key")
+	}
+}
+
+func TestConfirmModeUnhandledKey(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.mode = ModeConfirm
+
+	a.Update(keyMsg("x"))
+	if a.mode != ModeConfirm {
+		t.Errorf("mode = %d, want ModeConfirm after unhandled key", a.mode)
+	}
+}
+
+func TestHelpModeUnhandledKey(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.mode = ModeHelp
+
+	a.Update(keyMsg("x"))
+	if a.mode != ModeHelp {
+		t.Errorf("mode = %d, want ModeHelp after unhandled key", a.mode)
+	}
+}
+
+func TestSearchModeRegularKey(t *testing.T) {
+	a := initApp(t, makeLargePlan(5, 0))
+	a.Update(keyMsg("/"))
+
+	// Regular key should fall through to search.Update + FilterByQuery
+	a.Update(keyMsg("S"))
+	if a.mode != ModeSearch {
+		t.Error("should stay in search mode after regular key")
+	}
+}
+
+func TestWindowSizeResize(t *testing.T) {
+	app := NewApp(makeLargePlan(3, 0), AppOptions{})
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
+	if a.detail == nil {
+		t.Fatal("detail should be created")
+	}
+
+	// Second resize should call detail.SetSize (else branch in updateLayout)
+	model, _ = a.Update(tea.WindowSizeMsg{Width: 100, Height: 25})
+	a, ok = model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
+	if a.width != 100 {
+		t.Errorf("width = %d, want 100", a.width)
+	}
+}
+
+func TestSinglePaneNoTitleBar(t *testing.T) {
+	// Plan without title, no filepath → empty title bar
+	p := &plan.Plan{Steps: []*plan.Step{{ID: "S1", Title: "Step", Level: 2}}}
+	app := NewApp(p, AppOptions{})
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
+
+	view := a.View()
+	if view == "" {
+		t.Error("view should not be empty")
+	}
+}
+
+func TestDualPaneFocusRight(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.focus = FocusRight
+
+	view := a.View()
+	if view == "" {
+		t.Error("view should not be empty with right focus in dual pane")
+	}
+}
+
+func TestDualPaneNoTitleBar(t *testing.T) {
+	// Plan without title, no filepath → empty title bar in dual pane
+	p := &plan.Plan{Steps: []*plan.Step{{ID: "S1", Title: "Step", Level: 2}}}
+	a := initApp(t, p)
+
+	view := a.View()
+	if view == "" {
+		t.Error("view should not be empty")
+	}
+}
+
+func TestCommentListModeUnhandledKey(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "test"})
+
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("C")) // comment list mode
+
+	// Unhandled key should not change mode
+	a.Update(keyMsg("x"))
+	if a.mode != ModeCommentList {
+		t.Errorf("mode = %d, want ModeCommentList after unhandled key", a.mode)
+	}
+}
+
+func TestRenderScrollUp(t *testing.T) {
+	// Create a plan with enough steps to cause scrolling in a small viewport
+	p := makeLargePlan(30, 0) // 30 steps + overview = 31 items
+	a := initApp(t, p)
+	a.height = 10 // small viewport
+
+	// Scroll down to the bottom
+	for range 25 {
+		a.stepList.CursorDown()
+	}
+	// Render to update scrollOffset
+	a.stepList.Render(80, 10, a.styles)
+
+	// Jump to top - this should trigger cursorPos < scrollOffset
+	a.stepList.CursorTop()
+	output := a.stepList.Render(80, 10, a.styles)
+	if !strings.Contains(output, "Overview") {
+		t.Error("after jump to top, Overview should be visible")
+	}
+}
+
+func TestClipLines(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		maxLines int
+		wantMax  int
+	}{
+		{"within limit", "a\nb\nc", 5, 3},
+		{"exceeds limit", "a\nb\nc\nd\ne", 3, 3},
+		{"empty", "", 5, 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := clipLines(tt.input, tt.maxLines)
+			lines := strings.Count(result, "\n") + 1
+			if lines > tt.wantMax {
+				t.Errorf("clipLines got %d lines, want <= %d", lines, tt.wantMax)
+			}
+		})
 	}
 }

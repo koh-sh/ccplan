@@ -1,6 +1,8 @@
 package hook
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -115,6 +117,177 @@ func TestRunSkipsNonPlanFile(t *testing.T) {
 	}
 	if mock.spawnCalled {
 		t.Error("spawner should not be called for file outside plans directory")
+	}
+}
+
+// setupPlanEnv creates a temporary directory structure that simulates
+// a project with .claude/settings.local.json pointing to a plans directory,
+// and a plan file inside that directory.
+func setupPlanEnv(t *testing.T) (plansDir, planFile, cwd string) {
+	t.Helper()
+	cwd = t.TempDir()
+	plansDir = filepath.Join(cwd, ".claude", "plans")
+	if err := os.MkdirAll(plansDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create settings.local.json pointing to the plans dir
+	settingsDir := filepath.Join(cwd, ".claude")
+	settings := map[string]string{"plansDirectory": plansDir}
+	data, _ := json.Marshal(settings)
+	if err := os.WriteFile(filepath.Join(settingsDir, "settings.local.json"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a plan file
+	planFile = filepath.Join(plansDir, "test-plan.md")
+	if err := os.WriteFile(planFile, []byte("# Test Plan\n## S1\nStep content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return
+}
+
+func TestRunSuccessWithReview(t *testing.T) {
+	_, planFile, cwd := setupPlanEnv(t)
+
+	mock := &mockSpawner{
+		available: true,
+		name:      "mock",
+		spawnFunc: func(cmd string, args []string) error {
+			// Find --output-path in args and write review content
+			for i, arg := range args {
+				if arg == "--output-path" && i+1 < len(args) {
+					return os.WriteFile(args[i+1], []byte("review feedback"), 0o644)
+				}
+			}
+			return fmt.Errorf("--output-path not found in args")
+		},
+	}
+
+	input := &Input{
+		PermissionMode: "plan",
+		CWD:            cwd,
+		ToolInput:      &ToolInput{FilePath: planFile},
+	}
+
+	code, err := Run(input, RunConfig{Spawner: mock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 2 {
+		t.Errorf("exit code = %d, want 2 (feedback)", code)
+	}
+	if !mock.spawnCalled {
+		t.Error("spawner should have been called")
+	}
+}
+
+func TestRunSuccessNoReview(t *testing.T) {
+	_, planFile, cwd := setupPlanEnv(t)
+
+	mock := &mockSpawner{
+		available: true,
+		name:      "mock",
+		spawnFunc: func(cmd string, args []string) error {
+			// Don't write anything to output path (empty review)
+			return nil
+		},
+	}
+
+	input := &Input{
+		PermissionMode: "plan",
+		CWD:            cwd,
+		ToolInput:      &ToolInput{FilePath: planFile},
+	}
+
+	code, err := Run(input, RunConfig{Spawner: mock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0", code)
+	}
+}
+
+func TestRunFileNotFound(t *testing.T) {
+	plansDir, _, cwd := setupPlanEnv(t)
+
+	mock := &mockSpawner{available: true, name: "mock"}
+	input := &Input{
+		PermissionMode: "plan",
+		CWD:            cwd,
+		ToolInput:      &ToolInput{FilePath: filepath.Join(plansDir, "nonexistent.md")},
+	}
+
+	code, err := Run(input, RunConfig{Spawner: mock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0", code)
+	}
+	if mock.spawnCalled {
+		t.Error("spawner should not be called for nonexistent file")
+	}
+}
+
+func TestRunSpawnFailure(t *testing.T) {
+	_, planFile, cwd := setupPlanEnv(t)
+
+	mock := &mockSpawner{
+		available: true,
+		name:      "direct", // name="direct" so fallback is skipped
+		spawnFunc: func(cmd string, args []string) error {
+			return fmt.Errorf("spawn failed")
+		},
+	}
+
+	input := &Input{
+		PermissionMode: "plan",
+		CWD:            cwd,
+		ToolInput:      &ToolInput{FilePath: planFile},
+	}
+
+	// When spawn fails and name is "direct", no further fallback → exit 0
+	code, err := Run(input, RunConfig{Spawner: mock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0", code)
+	}
+}
+
+func TestRunReviewFileRemoved(t *testing.T) {
+	_, planFile, cwd := setupPlanEnv(t)
+
+	mock := &mockSpawner{
+		available: true,
+		name:      "mock",
+		spawnFunc: func(cmd string, args []string) error {
+			// Remove the review output file to trigger ReadFile error
+			for i, arg := range args {
+				if arg == "--output-path" && i+1 < len(args) {
+					os.Remove(args[i+1])
+					return nil
+				}
+			}
+			return nil
+		},
+	}
+
+	input := &Input{
+		PermissionMode: "plan",
+		CWD:            cwd,
+		ToolInput:      &ToolInput{FilePath: planFile},
+	}
+
+	code, err := Run(input, RunConfig{Spawner: mock})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0", code)
 	}
 }
 

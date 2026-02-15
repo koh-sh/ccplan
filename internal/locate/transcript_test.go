@@ -3,6 +3,7 @@ package locate
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -105,7 +106,76 @@ func TestFindPlanFilesWrongDir(t *testing.T) {
 func TestFindPlanFilesNonExistent(t *testing.T) {
 	_, err := FindPlanFilesInTranscript("/nonexistent/file.jsonl", "/tmp", false)
 	if err == nil {
-		t.Error("expected error for nonexistent file")
+		t.Fatal("expected error for nonexistent file")
+	}
+	if !strings.Contains(err.Error(), "no such file") {
+		t.Errorf("error = %q, want to contain 'no such file'", err.Error())
+	}
+}
+
+func TestFindPlanFilesWithEmptyLines(t *testing.T) {
+	// Transcript with empty lines between entries
+	tmpDir := t.TempDir()
+	transcriptFile := filepath.Join(tmpDir, "transcript.jsonl")
+
+	plansDir := filepath.Join(tmpDir, "plans")
+	if err := os.MkdirAll(plansDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	content := "\n" + // empty line at start
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":{"file_path":"` + filepath.Join(plansDir, "plan.md") + `"}}]}}` + "\n" +
+		"\n" + // empty line in middle
+		"\n" // empty line at end
+	if err := os.WriteFile(transcriptFile, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	paths, err := FindPlanFilesInTranscript(transcriptFile, plansDir, true)
+	if err != nil {
+		t.Fatalf("FindPlanFilesInTranscript() error: %v", err)
+	}
+	if len(paths) != 1 {
+		t.Errorf("len(paths) = %d, want 1", len(paths))
+	}
+}
+
+func TestFindPlanFilesWithBadContentBlock(t *testing.T) {
+	// Content block with invalid JSON in the raw content
+	tmpDir := t.TempDir()
+	transcriptFile := filepath.Join(tmpDir, "transcript.jsonl")
+
+	// content array has an invalid JSON element
+	content := `{"type":"assistant","message":{"role":"assistant","content":["not a valid block"]}}` + "\n"
+	if err := os.WriteFile(transcriptFile, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	paths, err := FindPlanFilesInTranscript(transcriptFile, filepath.Join(tmpDir, "plans"), true)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(paths) != 0 {
+		t.Errorf("expected 0 paths for invalid content block, got %d", len(paths))
+	}
+}
+
+func TestFindPlanFilesWithBadInput(t *testing.T) {
+	// Tool use with invalid JSON in the input field
+	tmpDir := t.TempDir()
+	transcriptFile := filepath.Join(tmpDir, "transcript.jsonl")
+
+	content := `{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":"not-an-object"}]}}` + "\n"
+	if err := os.WriteFile(transcriptFile, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	paths, err := FindPlanFilesInTranscript(transcriptFile, filepath.Join(tmpDir, "plans"), true)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(paths) != 0 {
+		t.Errorf("expected 0 paths for invalid input field, got %d", len(paths))
 	}
 }
 

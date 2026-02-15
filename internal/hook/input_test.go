@@ -1,9 +1,30 @@
 package hook
 
 import (
+	"fmt"
+	"io"
 	"strings"
 	"testing"
 )
+
+// errReader is a reader that always returns an error.
+type errReader struct{}
+
+func (e errReader) Read([]byte) (int, error) {
+	return 0, fmt.Errorf("read error")
+}
+
+func TestParseInputReadError(t *testing.T) {
+	_, err := ParseInput(errReader{})
+	if err == nil {
+		t.Fatal("expected error for failing reader")
+	}
+	if !strings.Contains(err.Error(), "reading") {
+		t.Errorf("error = %q, want to contain 'reading'", err.Error())
+	}
+}
+
+var _ io.Reader = errReader{}
 
 func TestParseInput(t *testing.T) {
 	tests := []struct {
