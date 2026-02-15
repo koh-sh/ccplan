@@ -27,7 +27,9 @@ func TestVersionCmdRun(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	if _, err := buf.ReadFrom(r); err != nil {
+		t.Fatal(err)
+	}
 	output := buf.String()
 
 	if output != "ccplan version 1.2.3\n" {
@@ -94,7 +96,9 @@ func TestLocateCmdRunWithTranscript(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	if _, err := buf.ReadFrom(r); err != nil {
+		t.Fatal(err)
+	}
 	output := buf.String()
 
 	if output == "" {
@@ -140,7 +144,7 @@ func TestReviewCmdRunFileNotFound(t *testing.T) {
 func TestLocateCmdRunStdinParseError(t *testing.T) {
 	oldStdin := os.Stdin
 	r, w, _ := os.Pipe()
-	w.WriteString("not valid json")
+	_, _ = w.WriteString("not valid json")
 	w.Close()
 	os.Stdin = r
 
@@ -218,7 +222,7 @@ func TestLocateCmdRunStdinMode(t *testing.T) {
 	hookInput := `{"session_id":"test","transcript_path":"` + transcriptFile + `","cwd":"` + tmpDir + `"}`
 	oldStdin := os.Stdin
 	r, w, _ := os.Pipe()
-	w.WriteString(hookInput)
+	_, _ = w.WriteString(hookInput)
 	w.Close()
 	os.Stdin = r
 
@@ -241,7 +245,9 @@ func TestLocateCmdRunStdinMode(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	buf.ReadFrom(rOut)
+	if _, err := buf.ReadFrom(rOut); err != nil {
+		t.Fatal(err)
+	}
 	output := buf.String()
 
 	if output == "" {
