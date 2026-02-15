@@ -6,14 +6,20 @@ import (
 	"io"
 )
 
-// Input represents the JSON input from a Claude Code Stop hook.
+// Input represents the JSON input from a Claude Code PostToolUse hook.
 type Input struct {
-	SessionID      string `json:"session_id"`
-	TranscriptPath string `json:"transcript_path"`
-	CWD            string `json:"cwd"`
-	HookEventName  string `json:"hook_event_name"`
-	PermissionMode string `json:"permission_mode"`
-	StopHookActive bool   `json:"stop_hook_active"`
+	SessionID      string     `json:"session_id"`
+	TranscriptPath string     `json:"transcript_path"`
+	CWD            string     `json:"cwd"`
+	HookEventName  string     `json:"hook_event_name"`
+	PermissionMode string     `json:"permission_mode"`
+	ToolName       string     `json:"tool_name"`
+	ToolInput      *ToolInput `json:"tool_input"`
+}
+
+// ToolInput represents the input parameters of a Write tool call.
+type ToolInput struct {
+	FilePath string `json:"file_path"`
 }
 
 // ParseInput reads and parses hook JSON input from a reader.

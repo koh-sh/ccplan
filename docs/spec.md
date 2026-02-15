@@ -15,7 +15,7 @@ Claude Codeのplanモードで生成されるプランファイルを操作す�
 |-------------|------|---------|
 | `ccplan review` | プランをTUIで可視化し、インラインレビューコメントを付与 | Phase 1 |
 | `ccplan locate` | transcript/設定からプランファイルのパスを特定して出力 | Phase 1 |
-| `ccplan hook` | Claude CodeのStop hookとして動作（locate + review + フィードバック） | Phase 2 |
+| `ccplan hook` | Claude CodeのPostToolUse hookとして動作（review + フィードバック） | Phase 2 |
 | `ccplan list` | plansDirectory内のプランファイル一覧を表示 | 将来 |
 | `ccplan diff` | 2つのプランの差分を表示 | 将来 |
 | `ccplan clean` | 古いプランファイルの削除 | 将来 |
@@ -131,7 +131,7 @@ ccplan/
 type CLI struct {
     Review  ReviewCmd  `cmd:"" help:"Review a plan file in TUI"`
     Locate  LocateCmd  `cmd:"" help:"Locate plan file path from transcript"`
-    // Hook HookCmd `cmd:"" help:"Run as Claude Code Stop hook"` // Phase 2
+    Hook    HookCmd    `cmd:"" help:"Run as Claude Code PostToolUse hook"`
     Version VersionCmd `cmd:"" help:"Show version"`
 }
 
@@ -188,7 +188,7 @@ cmd/hook    → internal/locate, internal/hook, internal/pane, internal/plan, in
                 ↑ hook は locate + review の合成
 
 internal/tui    → internal/plan （パース結果のモデルを表示）
-internal/hook   → internal/locate （プランファイル特定）
+internal/hook   → internal/locate （plansDirectory解決のみ）
 internal/locate → internal/plan は参照しない（パスの特定のみ）
 internal/pane   → 他パッケージへの依存なし
 ```
@@ -316,9 +316,10 @@ ccplan review "$(ccplan locate --transcript session.jsonl)"
 
 ---
 
-### `ccplan hook` — Claude Code Stop hookとして動作
+### `ccplan hook` — Claude Code PostToolUse hookとして動作
 
-Claude Codeの Stop hook から呼ばれ、locate → review → フィードバックの全フローを実行する。
+Claude Codeの PostToolUse (Write|Edit) hook から呼ばれ、プランファイルへの書き込みを検知して
+review → フィードバックの全フローを実行する。
 **bashスクリプトを完全に置き換える。**
 
 ```
@@ -333,14 +334,19 @@ Flags:
 stdinからhookのJSON入力を受け取り、内部で以下を実行:
 
 1. `permission_mode == "plan"` かチェック（plan以外は exit 0）
-2. `stop_hook_active == true` かチェック（無限ループ防止、exit 0）
-3. `PLAN_REVIEW_SKIP=1` 環境変数チェック（スキップ、exit 0）
-4. `internal/locate` でプランファイルを特定（見つからなければ exit 0）
-5. `internal/pane` で別ペインに `ccplan review` を起動
-6. review の結果に基づき:
+2. `PLAN_REVIEW_SKIP=1` 環境変数チェック（スキップ、exit 0）
+3. `tool_input.file_path` が plansDirectory 配下かチェック（配下でなければ exit 0）
+4. `internal/pane` で別ペインに `ccplan review` を起動
+5. review の結果に基づき:
    - submitted → stderrにレビュー内容を出力、exit 2（Claudeにフィードバック）
    - approved → exit 0
    - cancelled → exit 0
+
+> **Stop hookではなくPostToolUseを使う理由**: Claude Codeのplanモードでは
+> Stop hookが発火しないバグがある。PostToolUse (Write|Edit) はplanモードでも
+> 正常に動作し、プランファイルへのWrite/Edit直後にレビューを起動できる。
+> また、ユーザーがTUIでapprove/cancelを選ぶことでループを制御できるため、
+> 無限ループ防止のための特別な仕組みが不要になる。
 
 #### Claude Code設定
 
@@ -349,8 +355,9 @@ stdinからhookのJSON入力を受け取り、内部で以下を実行:
 ```json
 {
   "hooks": {
-    "Stop": [
+    "PostToolUse": [
       {
+        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
@@ -364,7 +371,9 @@ stdinからhookのJSON入力を受け取り、内部で以下を実行:
 }
 ```
 
-bashスクリプトが完全に不要。`ccplan hook` の1行だけ。
+`matcher: "Write|Edit"` でWrite/Editツールにフィルタリング。
+Claudeはプラン作成時にWrite、修正時にEditを使用するため両方が必要。
+プランファイル以外のWrite/Editは `isUnderPlansDir` チェックで弾かれる。
 
 #### 内部フロー（擬似コード）
 
@@ -380,28 +389,28 @@ func RunHook(stdin io.Reader) error {
     if input.PermissionMode != "plan" {
         os.Exit(0)
     }
-    if input.StopHookActive {
-        os.Exit(0)
-    }
     if os.Getenv("PLAN_REVIEW_SKIP") == "1" {
         os.Exit(0)
     }
 
-    // 3. プランファイルを特定（internal/locate）
-    planFile, err := locate.LocatePlanFile(locate.Options{
-        TranscriptPath: input.TranscriptPath,
-        CWD:            input.CWD,
-    })
-    if err != nil || planFile == "" {
+    // 3. tool_input からプランファイルパスを取得
+    if input.ToolInput == nil || input.ToolInput.FilePath == "" {
+        os.Exit(0)
+    }
+    planFile := input.ToolInput.FilePath
+
+    // 4. plansDirectory 配下かチェック
+    plansDir := locate.ResolvePlansDir(input.CWD)
+    if !isUnderPlansDir(planFile, plansDir) {
         os.Exit(0)
     }
 
-    // 4. 一時ファイルを用意
+    // 5. 一時ファイルを用意
     reviewOutput := tmpFile("ccplan-review-*.md")
     statusOutput := tmpFile("ccplan-status-*")
     defer cleanup(reviewOutput, statusOutput)
 
-    // 5. 別ペインで review を起動（internal/pane）
+    // 6. 別ペインで review を起動（internal/pane）
     spawner := pane.AutoDetect() // WezTerm → tmux → direct
     err = spawner.SpawnAndWait("ccplan", []string{
         "review",
@@ -414,7 +423,7 @@ func RunHook(stdin io.Reader) error {
         os.Exit(0) // ペイン起動失敗は何もしない
     }
 
-    // 6. 結果判定
+    // 7. 結果判定
     status := readFile(statusOutput)
     switch status {
     case "submitted":
@@ -435,17 +444,22 @@ func RunHook(stdin io.Reader) error {
   "session_id": "eb5b0174-0555-4601-804e-672d68069c89",
   "transcript_path": "/home/user/.claude/projects/.../eb5b0174-....jsonl",
   "cwd": "/home/user/projects/myapp",
-  "hook_event_name": "Stop",
+  "hook_event_name": "PostToolUse",
   "permission_mode": "plan",
-  "stop_hook_active": false
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "/home/user/.claude/plans/jaunty-petting-nebula.md"
+  }
 }
 ```
 
-#### 無限ループ防止
+#### ループ制御
 
-1. **`stop_hook_active` フラグ**: hook入力に含まれる。trueなら即座にexit 0。
-2. **一時ファイルの消去**: submit後にtmpファイルを削除。
-3. **環境変数**: `PLAN_REVIEW_SKIP=1` でhookを一時的に無効化。
+PostToolUseでは無限ループ防止の特別な仕組みは不要。理由:
+
+1. **ユーザー制御**: TUIでapprove/cancel（exit 0）を選べばループは停止する。
+   submit（exit 2）を選んだ場合のみClaudeがプランを修正し、再度Write/Editで発火する。
+2. **環境変数**: `PLAN_REVIEW_SKIP=1` でhookを一時的に無効化可能。
 
 ---
 
@@ -648,14 +662,14 @@ Token bucket方式で、設定値はconfigから読む。
 
 ---
 
-## Claude Code統合 — Stopフックによるシームレス起動
+## Claude Code統合 — PostToolUseフックによるシームレス起動
 
-### Stop hookが最適な理由
+### PostToolUse (Write|Edit) hookを使う理由
 
 | hookイベント | 検討結果 |
 |-------------|---------|
-| **Stop** ✅ | 応答完了時に発火。`permission_mode: "plan"` で判定可。exit 2でフィードバック注入。 |
-| PostToolUse (Write) | プラン全体の完成を保証できない（途中で複数回書き込む可能性）。 |
+| Stop | planモードでは発火しないバグがある（Claude Codeの承認待ち状態がStopとみなされない）。 |
+| **PostToolUse (Write\|Edit)** ✅ | planモードでも正常に発火。`tool_input.file_path` でプランファイルを直接判定可。exit 2でフィードバック注入。ユーザーがTUIでapprove/cancelを選ぶことでループを制御。Claudeはプラン作成時にWrite、修正時にEditを使用。 |
 | Notification | フィードバックをClaudeに戻す仕組みがない。 |
 
 ### 動作フロー
@@ -666,15 +680,15 @@ Token bucket方式で、設定値はconfigから読む。
 │                                                                 │
 │  1. ユーザーが計画を依頼                                         │
 │  2. Claudeがコードベースを分析してプランを生成                    │
-│  3. Claudeが応答完了 → Stop hook発火                             │
+│  3. Claudeがプランファイルを Write/Edit → PostToolUse hook発火     │
 │  4. ccplan hook が stdin から hook入力を受け取る                  │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │ ccplan hook (Go)                                         │   │
 │  │                                                          │   │
 │  │  5. permission_mode == "plan" を確認                      │   │
-│  │  6. stop_hook_active / PLAN_REVIEW_SKIP チェック           │   │
-│  │  7. internal/locate でプランファイルを特定                  │   │
+│  │  6. PLAN_REVIEW_SKIP チェック                              │   │
+│  │  7. tool_input.file_path が plansDir 配下か判定            │   │
 │  │  8. internal/pane で隣接ペインに ccplan review を起動       │   │
 │  │  9. review プロセスの完了を待機                             │   │
 │  │                                                          │   │
@@ -694,8 +708,8 @@ Token bucket方式で、設定値はconfigから読む。
 │  └──────────────────────────────────────────────────────────┘   │
 │                                                                 │
 │  11-a. exit 2: Claude がレビューを受け取りプラン修正             │
-│        → 再度Stop発火 → stop_hook_active=true → exit 0          │
-│  11-b. exit 0: Claude が通常停止、ユーザーが続行判断             │
+│        → 再度Write/Edit → PostToolUse発火 → ユーザーが再レビュー可 │
+│  11-b. exit 0: Claude が続行、ユーザーが判断                     │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -1007,7 +1021,7 @@ ModeComment:
 | `internal/plan` | レビュー結果フォーマッタ | ReviewResult → Markdown文字列の変換を検証 |
 | `internal/locate` | transcript JSONLパーサー | テスト用.jsonlファイルを `testdata/` に配置 |
 | `internal/locate` | plansDirectory解決 | 一時ディレクトリにsettings.jsonを配置してテスト |
-| `internal/hook` | hook入力パーサー（Phase 2） | 各種JSON入力パターン（正常、plan以外、stop_hook_active等） |
+| `internal/hook` | hook入力パーサー（Phase 2） | 各種JSON入力パターン（正常、plan以外、tool_input null等） |
 
 ### テストデータの管理
 
@@ -1111,9 +1125,9 @@ go install github.com/koh-sh/ccplan@latest
 
 ### Phase 2: Claude Code統合
 
-- **`ccplan hook`**: Stop hookオーケストレーション
-  - hook入力パーサー（permission_mode / stop_hook_active）
-  - locate → review → exit code の合成フロー
+- **`ccplan hook`**: PostToolUse (Write|Edit) hookオーケストレーション
+  - hook入力パーサー（permission_mode / tool_input.file_path）
+  - plansDir判定 → review → exit code の合成フロー
 - WezTerm PaneSpawner実装（`--spawn-pane`）
 - E2Eフローの検証
 

@@ -10,7 +10,7 @@ import (
 type CLI struct {
 	Review  ReviewCmd  `cmd:"" help:"Review a plan file in TUI"`
 	Locate  LocateCmd  `cmd:"" help:"Locate plan file path from transcript"`
-	Hook    HookCmd    `cmd:"" help:"Run as Claude Code Stop hook"`
+	Hook    HookCmd    `cmd:"" help:"Run as Claude Code PostToolUse hook"`
 	Version VersionCmd `cmd:"" help:"Show version"`
 }
 

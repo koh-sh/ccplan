@@ -3,6 +3,8 @@ package hook
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/koh-sh/ccplan/internal/locate"
 	"github.com/koh-sh/ccplan/internal/pane"
@@ -22,22 +24,26 @@ func Run(input *Input, cfg RunConfig) (int, error) {
 	if input.PermissionMode != "plan" {
 		return 0, nil
 	}
-	if input.StopHookActive {
-		return 0, nil
-	}
 	if os.Getenv("PLAN_REVIEW_SKIP") == "1" {
 		return 0, nil
 	}
 
-	// Locate plan file
-	paths, err := locate.LocatePlanFile(locate.Options{
-		TranscriptPath: input.TranscriptPath,
-		CWD:            input.CWD,
-	})
-	if err != nil || len(paths) == 0 {
+	// Determine plan file from tool_input
+	if input.ToolInput == nil || input.ToolInput.FilePath == "" {
 		return 0, nil
 	}
-	planFile := paths[0]
+	planFile := input.ToolInput.FilePath
+
+	// Check if file is under plans directory
+	plansDir := locate.ResolvePlansDir(input.CWD)
+	if !isUnderPlansDir(planFile, plansDir) {
+		return 0, nil
+	}
+
+	// Check file exists
+	if _, err := os.Stat(planFile); err != nil {
+		return 0, nil
+	}
 
 	// Prepare temp files for IPC with review subprocess
 	reviewFile, err := os.CreateTemp("", "ccplan-review-*.md")
@@ -112,4 +118,14 @@ func Run(input *Input, cfg RunConfig) (int, error) {
 	}
 
 	return 0, nil
+}
+
+// isUnderPlansDir checks if filePath is under plansDir.
+func isUnderPlansDir(filePath, plansDir string) bool {
+	if plansDir == "" {
+		return false
+	}
+	cleanPath := filepath.Clean(filePath)
+	cleanDir := filepath.Clean(plansDir) + string(filepath.Separator)
+	return strings.HasPrefix(cleanPath, cleanDir)
 }
