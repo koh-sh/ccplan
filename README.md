@@ -29,9 +29,7 @@ ccplan review --output stdout plan.md
 |------|-------------|
 | `--output` | Output method: `clipboard` (default), `stdout`, `file` |
 | `--output-path` | File path for `--output file` |
-| `--status-path` | Write exit status to file (`submitted` / `approved` / `cancelled`) |
 | `--theme` | Color theme: `dark` (default), `light` |
-| `--no-color` | Disable colors |
 
 ### `ccplan locate`
 
@@ -57,7 +55,6 @@ ccplan hook
 |------|-------------|
 | `--spawner` | Terminal multiplexer: `auto` (default), `wezterm`, `tmux` |
 | `--theme` | Color theme: `dark` (default), `light` |
-| `--no-color` | Disable colors |
 
 ## Claude Code Hook Setup
 
@@ -100,7 +97,8 @@ Set `PLAN_REVIEW_SKIP=1` to temporarily disable the hook.
 | `l` / `h` / `→` / `←` | Expand / collapse |
 | `Enter` | Toggle expand/collapse |
 | `Tab` | Switch focus between panes |
-| `c` | Add/edit comment |
+| `c` | Add comment |
+| `C` | Manage comments (edit/delete) |
 | `v` | Toggle viewed mark |
 | `/` | Search steps |
 | `s` | Submit review and exit |
@@ -114,6 +112,15 @@ Set `PLAN_REVIEW_SKIP=1` to temporarily disable the hook.
 | `Tab` | Cycle comment label |
 | `Ctrl+S` | Save comment |
 | `Esc` | Cancel |
+
+### Comment List Mode
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Navigate comments |
+| `e` | Edit selected comment |
+| `d` | Delete selected comment |
+| `Esc` | Back to normal mode |
 
 ### Search Mode
 
@@ -130,6 +137,8 @@ The review output generated on submit uses [Conventional Comments](https://conve
 
 ```markdown
 # Plan Review
+
+Please review and address the following comments on: /path/to/plan.md
 
 ## S1.1: JWT verification [suggestion]
 Switch to HS256. Load the key from an environment variable.

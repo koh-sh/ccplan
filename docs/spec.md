@@ -98,6 +98,8 @@ ccplan/
 │       ├── steplist.go      # 左ペイン：ステップ一覧ツリー【自作、bubbles/list参考】
 │       ├── detail.go        # 右ペイン：Glamourレンダリング + bubbles/viewport
 │       ├── comment.go       # コメント入力（bubbles/textarea をラップ）
+│       ├── commentlist.go   # コメント一覧管理（編集・削除）
+│       ├── search.go        # ステップ検索バー
 │       ├── styles.go        # Lip Gloss スタイル定義
 │       └── keymap.go        # キーバインド定義（bubbles/key）
 ├── main.go
@@ -137,15 +139,9 @@ type CLI struct {
 
 type ReviewCmd struct {
     PlanFile   string `arg:"" help:"Path to the Markdown plan file"`
-    Output     string `enum:"clipboard,stdout,file" default:"clipboard" help:"Output method"`
+    Output     string `enum:"clipboard,stdout,file" default:"clipboard" help:"Output method (clipboard|stdout|file)"`
     OutputPath string `help:"File path for file output" type:"path"`
-    StatusPath string `help:"File path to write exit status" type:"path"`
-    Theme      string `enum:"dark,light" default:"dark" help:"Color theme"`
-    NoColor    bool   `help:"Disable colors"`
-    // Phase 2 で追加予定:
-    // SpawnPane  bool   `help:"Launch TUI in a new terminal pane"`
-    // Spawner    string `enum:"wezterm,tmux,auto" default:"auto" help:"Force specific multiplexer"`
-    // PaneTarget string `help:"Target pane for pane output (e.g., tmux:.1)"`
+    Theme      string `enum:"dark,light" default:"dark" help:"Color theme (dark|light)"`
 }
 
 type LocateCmd struct {
@@ -153,14 +149,12 @@ type LocateCmd struct {
     CWD        string `help:"Working directory for resolving relative plansDirectory" default:"." type:"existingdir"`
     Stdin      bool   `help:"Read hook JSON input from stdin"`
     All        bool   `help:"Output all plan files found in transcript"`
-    Quiet      bool   `help:"Exit code only (0=found, 1=not found), no output"`
 }
 
 // Phase 2
 type HookCmd struct {
-    Spawner string `enum:"wezterm,tmux,auto" default:"auto" help:"Force specific multiplexer"`
-    Theme   string `enum:"dark,light" default:"dark" help:"Color theme"`
-    NoColor bool   `help:"Disable colors"`
+    Spawner string `enum:"wezterm,tmux,auto" default:"auto" help:"Force specific multiplexer (wezterm|tmux|auto)"`
+    Theme   string `enum:"dark,light" default:"dark" help:"Color theme (dark|light)"`
 }
 ```
 
@@ -212,15 +206,7 @@ Arguments:
 Flags:
   --output       Output method: clipboard (default), stdout, file
   --output-path  File path for file output
-  --status-path  File path to write exit status (submitted / approved / cancelled)
   --theme        Color theme: dark (default), light
-  --no-color     Disable colors
-
-Phase 2 で追加予定:
-  --output pane  Output method に pane を追加
-  --spawn-pane   Launch TUI in a new terminal pane (auto-detects multiplexer)
-  --spawner      Force specific multiplexer: wezterm, tmux, auto (default: auto)
-  --pane-target  Target pane for pane output (e.g., tmux:.1)
 ```
 
 #### 使用例
@@ -251,7 +237,6 @@ Flags:
   --cwd          Working directory for resolving relative plansDirectory (default: .)
   --stdin        Read hook JSON input from stdin (transcript_path / cwd を自動抽出)
   --all          Output all plan files found in transcript (default: latest only)
-  --quiet        Exit code only (0=found, 1=not found), no output
 ```
 
 #### 使用例
@@ -294,7 +279,7 @@ ccplan review "$(ccplan locate --transcript session.jsonl)"
 
 3. バリデーション
    a. 特定されたファイルが実際に存在するか確認
-   b. 存在しなければスキップ（--quiet なら exit 1）
+   b. 存在しなければスキップ
 ```
 
 #### 並行セッション時の安全性
@@ -328,7 +313,6 @@ ccplan hook [flags]
 Flags:
   --spawner      Force specific multiplexer: wezterm, tmux, auto (default: auto)
   --theme        Color theme: dark (default), light
-  --no-color     Disable colors
 ```
 
 stdinからhookのJSON入力を受け取り、内部で以下を実行:
@@ -407,8 +391,7 @@ func RunHook(stdin io.Reader) error {
 
     // 5. 一時ファイルを用意
     reviewOutput := tmpFile("ccplan-review-*.md")
-    statusOutput := tmpFile("ccplan-status-*")
-    defer cleanup(reviewOutput, statusOutput)
+    defer cleanup(reviewOutput)
 
     // 6. 別ペインで review を起動（internal/pane）
     spawner := pane.AutoDetect() // WezTerm → tmux → direct
@@ -416,22 +399,18 @@ func RunHook(stdin io.Reader) error {
         "review",
         "--output", "file",
         "--output-path", reviewOutput,
-        "--status-path", statusOutput,
+        "--theme", cfg.Theme,
         planFile,
     })
     if err != nil {
         os.Exit(0) // ペイン起動失敗は何もしない
     }
 
-    // 7. 結果判定
-    status := readFile(statusOutput)
-    switch status {
-    case "submitted":
-        review := readFile(reviewOutput)
-        if review != "" {
-            fmt.Fprint(os.Stderr, review)
-            os.Exit(2) // Claudeにフィードバック
-        }
+    // 7. 結果判定 — レビューファイルが非空なら submitted
+    review := readFile(reviewOutput)
+    if review != "" {
+        fmt.Fprint(os.Stderr, review)
+        os.Exit(2) // Claudeにフィードバック
     }
     os.Exit(0)
 }
@@ -600,7 +579,7 @@ func Parse(source []byte) (*Plan, error) {
 ```markdown
 # Plan Review
 
-以下のレビューコメントに基づいてプランを修正してください。
+Please review and address the following comments on: /path/to/plan.md
 
 ## S1.1: JWT検証 [suggestion]
 HS256に変更。鍵は環境変数 `JWT_SECRET` から読み込む方式にして。
@@ -624,16 +603,6 @@ HS256に変更。鍵は環境変数 `JWT_SECRET` から読み込む方式にし�
 | **ファイル** | 指定パスに書き出し | `--output file --output-path ./review.md` |
 | **ペイン送信** (将来) | 別ペインに送信 | `--output pane` |
 
-#### ステータスファイル（hook連携用）
-
-`--status-path` 指定時、TUI終了時に結果ステータスを書き出す:
-
-| ステータス | 意味 | hookの動作 |
-|-----------|------|-----------|
-| `submitted` | レビューをsubmitした | レビューファイルを読んで exit 2 |
-| `approved` | コメントなし | exit 0（続行） |
-| `cancelled` | `q` で中断した | exit 0（何もしない） |
-
 ### キーバインド一覧
 
 | キー | コンテキスト | アクション |
@@ -644,7 +613,8 @@ HS256に変更。鍵は環境変数 `JWT_SECRET` から読み込む方式にし�
 | `→` / `l` | ステップ一覧 | 展開 |
 | `←` / `h` | ステップ一覧 | 折りたたみ |
 | `Tab` | 全体 | 左ペイン ↔ 右ペインのフォーカス切り替え |
-| `c` | ステップ選択中 | コメント入力モードを開始 |
+| `c` | ステップ選択中 | 新規コメントを追加 |
+| `C` | ステップ選択中 | コメント一覧モードを開始（編集・削除） |
 | `v` | ステップ選択中 | viewedマークをトグル |
 | `/` | ステップ一覧 | 検索モードを開始 |
 | `Tab` | コメント入力中 | ラベルをサイクル切替 |
@@ -883,11 +853,12 @@ const (
 type AppMode int
 
 const (
-    ModeNormal   AppMode = iota // ステップ一覧のナビゲーション
-    ModeComment                 // コメント入力中（textareaにフォーカス）
-    ModeConfirm                 // 確認ダイアログ（未保存コメントがある状態で q を押した等）
-    ModeHelp                    // ヘルプオーバーレイ表示中
-    ModeSearch                  // ステップ検索（インクリメンタルフィルタ）
+    ModeNormal      AppMode = iota // ステップ一覧のナビゲーション
+    ModeComment                    // コメント入力中（textareaにフォーカス）
+    ModeCommentList                // コメント一覧（編集・削除）
+    ModeConfirm                    // 確認ダイアログ（未保存コメントがある状態で q を押した等）
+    ModeHelp                       // ヘルプオーバーレイ表示中
+    ModeSearch                     // ステップ検索（インクリメンタルフィルタ）
 )
 ```
 
@@ -963,11 +934,14 @@ ModeComment:
 
 ### コメントのライフサイクル
 
+1ステップに複数のコメントを付与可能。
+
 | 操作 | 方法 |
 |------|------|
-| 新規作成 | `c` キーでtextareaを開いて入力、`Tab` でラベル切替、`Ctrl+S` で確定 |
-| 編集 | 既にコメントがあるステップで `c` → 既存コメントとラベルがプリフィルされた状態で編集 |
-| 削除 | 既にコメントがあるステップで `c` → テキストを全消去して `Ctrl+S` |
+| 新規追加 | `c` キーで空のtextareaを開いて入力、`Tab` でラベル切替、`Ctrl+S` で確定。常に新規コメントを追加 |
+| 一覧表示 | `C` キーでコメント一覧モードを開始。`j/k` でコメント間移動 |
+| 編集 | コメント一覧モードで `e` → 既存コメントがプリフィルされた状態で編集 → 保存後一覧に戻る |
+| 削除 | コメント一覧モードで `d` → 選択中のコメントを削除。最後の1件を削除するとノーマルモードに戻る |
 | viewed マーク | `v` キー → ステップを確認済みとしてマーク（レビュー出力には含まれない） |
 
 ### Conventional Comments ラベル
@@ -1125,7 +1099,6 @@ go install github.com/koh-sh/ccplan@latest
   - 折りたたみ/展開
   - コメント入力（bubbles/textarea）
   - 出力（clipboard / stdout / file）
-  - `--status-path`
 - **`ccplan locate`**: transcript解析 + plansDirectory解決
   - JSONL transcriptパーサー
   - settings.json の plansDirectory 解決チェーン

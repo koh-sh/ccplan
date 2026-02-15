@@ -24,7 +24,7 @@ go test -run TestParsePreamble ./internal/plan  # Run a single test
 ### Package Layout
 
 - **`internal/plan/`** — Core domain. Markdown parsing via goldmark AST (not regex, to avoid `#` in code blocks being misinterpreted as headings). Data models (`Plan`, `Step`, `ReviewComment`), review output formatting.
-- **`internal/tui/`** — Bubble Tea TUI. 2-pane layout: `StepList` (left) + `DetailPane` (right). Mode-based state machine: `ModeNormal` → `ModeComment` → `ModeConfirm` → `ModeHelp` → `ModeSearch`.
+- **`internal/tui/`** — Bubble Tea TUI. 2-pane layout: `StepList` (left) + `DetailPane` (right). Mode-based state machine: `ModeNormal` → `ModeComment` → `ModeCommentList` → `ModeConfirm` → `ModeHelp` → `ModeSearch`.
 - **`internal/locate/`** — Plan file discovery from Claude Code transcript JSONL files. `plansDirectory` resolution chain: `.claude/settings.local.json` → `.claude/settings.json` → `~/.claude/settings.json` → `~/.claude/plans/`.
 - **`internal/hook/`** — PostToolUse hook orchestration. Parses stdin JSON from Claude Code, validates `permission_mode == "plan"`, spawns review in a pane, returns exit code 0 (continue) or 2 (feedback).
 - **`internal/pane/`** — Terminal multiplexer abstraction. `PaneSpawner` interface with WezTerm, tmux (stub), and Direct (fallback) implementations. `AutoDetect()` tries WezTerm → tmux → Direct.
