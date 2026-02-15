@@ -62,7 +62,7 @@ func TestViewFitsTerminalHeight(t *testing.T) {
 
 	for _, sz := range sizes {
 		t.Run(sz.name, func(t *testing.T) {
-			app := NewApp(p)
+			app := NewApp(p, AppOptions{})
 
 			// Simulate window size message
 			model, _ := app.Update(tea.WindowSizeMsg{Width: sz.width, Height: sz.height})
@@ -80,7 +80,7 @@ func TestViewFitsTerminalHeight(t *testing.T) {
 
 func TestViewFitsInCommentMode(t *testing.T) {
 	p := makeLargePlan(20, 3)
-	app := NewApp(p)
+	app := NewApp(p, AppOptions{})
 
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	a := model.(*App)
@@ -100,7 +100,7 @@ func TestViewFitsInCommentMode(t *testing.T) {
 
 func TestViewFitsInConfirmMode(t *testing.T) {
 	p := makeLargePlan(20, 3)
-	app := NewApp(p)
+	app := NewApp(p, AppOptions{})
 
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	a := model.(*App)
@@ -117,7 +117,7 @@ func TestViewFitsInConfirmMode(t *testing.T) {
 
 func TestStepListScrollsWithCursor(t *testing.T) {
 	p := makeLargePlan(30, 0) // 30 top-level steps, no children
-	app := NewApp(p)
+	app := NewApp(p, AppOptions{})
 
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
 	a := model.(*App)
@@ -146,7 +146,7 @@ func TestStepListScrollsWithCursor(t *testing.T) {
 
 func TestViewFitsInHelpMode(t *testing.T) {
 	p := makeLargePlan(5, 2)
-	app := NewApp(p)
+	app := NewApp(p, AppOptions{})
 
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	a := model.(*App)

@@ -48,18 +48,26 @@ type App struct {
 	width  int
 	height int
 	ready  bool
+	opts   AppOptions
 
 	result AppResult
 }
 
+// AppOptions configures the TUI appearance.
+type AppOptions struct {
+	Theme   string // "dark" or "light"
+	NoColor bool
+}
+
 // NewApp creates a new App model.
-func NewApp(p *plan.Plan) *App {
+func NewApp(p *plan.Plan, opts AppOptions) *App {
 	return &App{
 		plan:     p,
 		stepList: NewStepList(p),
 		comment:  NewCommentEditor(),
 		keymap:   DefaultKeyMap(),
-		styles:   DefaultStyles(),
+		styles:   stylesForTheme(opts.Theme, opts.NoColor),
+		opts:     opts,
 		result: AppResult{
 			Status: plan.StatusCancelled,
 		},
@@ -343,7 +351,7 @@ func (a *App) updateLayout() {
 	rw := a.rightWidth()
 
 	if a.detail == nil {
-		a.detail = NewDetailPane(rw, ch)
+		a.detail = NewDetailPane(rw, ch, a.opts.Theme)
 	} else {
 		a.detail.SetSize(rw, ch)
 	}

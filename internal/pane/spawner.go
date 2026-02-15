@@ -1,0 +1,11 @@
+package pane
+
+// PaneSpawner abstracts terminal multiplexer pane operations.
+type PaneSpawner interface {
+	// SpawnAndWait spawns a command in a new pane and waits for completion.
+	SpawnAndWait(cmd string, args []string) error
+	// Available returns whether this spawner can be used in the current environment.
+	Available() bool
+	// Name returns the multiplexer name.
+	Name() string
+}

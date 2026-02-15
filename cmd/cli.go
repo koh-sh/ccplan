@@ -10,7 +10,15 @@ import (
 type CLI struct {
 	Review  ReviewCmd  `cmd:"" help:"Review a plan file in TUI"`
 	Locate  LocateCmd  `cmd:"" help:"Locate plan file path from transcript"`
+	Hook    HookCmd    `cmd:"" help:"Run as Claude Code Stop hook"`
 	Version VersionCmd `cmd:"" help:"Show version"`
+}
+
+// HookCmd is the hook subcommand.
+type HookCmd struct {
+	Spawner string `enum:"wezterm,tmux,auto" default:"auto" help:"Force specific multiplexer"`
+	Theme   string `enum:"dark,light" default:"dark" help:"Color theme"`
+	NoColor bool   `help:"Disable colors"`
 }
 
 // ReviewCmd is the review subcommand.

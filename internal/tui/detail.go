@@ -17,13 +17,19 @@ type DetailPane struct {
 	renderer *glamour.TermRenderer
 	width    int
 	height   int
+	theme    string
 }
 
-// customDarkStyle returns a dark style with red background removed from
+// customStyle returns a glamour style with red background removed from
 // Chroma error tokens. Japanese text can be misidentified as error tokens
 // by Chroma, causing distracting red backgrounds.
-func customDarkStyle() ansi.StyleConfig {
-	style := styles.DarkStyleConfig
+func customStyle(theme string) ansi.StyleConfig {
+	var style ansi.StyleConfig
+	if theme == "light" {
+		style = styles.LightStyleConfig
+	} else {
+		style = styles.DarkStyleConfig
+	}
 	if style.CodeBlock.Chroma != nil {
 		chroma := *style.CodeBlock.Chroma
 		chroma.Error = ansi.StylePrimitive{
@@ -35,10 +41,10 @@ func customDarkStyle() ansi.StyleConfig {
 }
 
 // NewDetailPane creates a new DetailPane.
-func NewDetailPane(width, height int) *DetailPane {
+func NewDetailPane(width, height int, theme string) *DetailPane {
 	vp := viewport.New(width, height)
 	renderer, _ := glamour.NewTermRenderer(
-		glamour.WithStyles(customDarkStyle()),
+		glamour.WithStyles(customStyle(theme)),
 		glamour.WithWordWrap(width-4),
 	)
 
@@ -47,6 +53,7 @@ func NewDetailPane(width, height int) *DetailPane {
 		renderer: renderer,
 		width:    width,
 		height:   height,
+		theme:    theme,
 	}
 }
 
@@ -61,7 +68,7 @@ func (d *DetailPane) SetSize(width, height int) {
 	d.viewport.Height = height
 
 	d.renderer, _ = glamour.NewTermRenderer(
-		glamour.WithStyles(customDarkStyle()),
+		glamour.WithStyles(customStyle(d.theme)),
 		glamour.WithWordWrap(width-4),
 	)
 }
