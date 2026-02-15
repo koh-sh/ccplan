@@ -4,9 +4,6 @@ import "github.com/charmbracelet/lipgloss"
 
 // Styles holds all the lipgloss styles for the TUI.
 type Styles struct {
-	// Panes
-	LeftPane       lipgloss.Style
-	RightPane      lipgloss.Style
 	ActiveBorder   lipgloss.Style
 	InactiveBorder lipgloss.Style
 
@@ -23,96 +20,90 @@ type Styles struct {
 
 	// Comment
 	CommentBorder lipgloss.Style
+}
 
-	// Help
-	HelpStyle lipgloss.Style
+// colorPalette defines the color values for a theme.
+type colorPalette struct {
+	activeBorder   string
+	inactiveBorder string
+	title          string
+	selectedStep   string
+	normalStep     string
+	stepBadge      string
+	viewedBadge    string
+	statusBar      string
+	statusKey      string
+	commentBorder  string
+}
+
+var (
+	darkPalette = colorPalette{
+		activeBorder:   "62",
+		inactiveBorder: "240",
+		title:          "170",
+		selectedStep:   "212",
+		normalStep:     "252",
+		stepBadge:      "170",
+		viewedBadge:    "82",
+		statusBar:      "240",
+		statusKey:      "62",
+		commentBorder:  "62",
+	}
+
+	lightPalette = colorPalette{
+		activeBorder:   "33",
+		inactiveBorder: "250",
+		title:          "130",
+		selectedStep:   "33",
+		normalStep:     "236",
+		stepBadge:      "130",
+		viewedBadge:    "28",
+		statusBar:      "245",
+		statusKey:      "33",
+		commentBorder:  "33",
+	}
+)
+
+func buildStyles(p colorPalette) Styles {
+	return Styles{
+		ActiveBorder: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(p.activeBorder)),
+		InactiveBorder: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(p.inactiveBorder)),
+		Title: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(p.title)),
+		SelectedStep: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(p.selectedStep)),
+		NormalStep: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(p.normalStep)),
+		StepBadge: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(p.stepBadge)),
+		ViewedBadge: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(p.viewedBadge)),
+		StatusBar: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(p.statusBar)),
+		StatusKey: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(p.statusKey)).
+			Bold(true),
+		CommentBorder: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(p.commentBorder)),
+	}
 }
 
 // stylesForTheme returns styles for the given theme.
 func stylesForTheme(theme string) Styles {
 	if theme == "light" {
-		return lightStyles()
+		return buildStyles(lightPalette)
 	}
-	return darkStyles()
-}
-
-// darkStyles returns the dark theme styles.
-func darkStyles() Styles {
-	return Styles{
-		LeftPane: lipgloss.NewStyle().
-			Padding(0, 1),
-		RightPane: lipgloss.NewStyle().
-			Padding(0, 1),
-		ActiveBorder: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")),
-		InactiveBorder: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240")),
-		Title: lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("170")),
-		SelectedStep: lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("212")),
-		NormalStep: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("252")),
-		StepBadge: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("170")),
-		ViewedBadge: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("82")),
-		StatusBar: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240")),
-		StatusKey: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("62")).
-			Bold(true),
-		CommentBorder: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("62")),
-		HelpStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("240")),
-	}
-}
-
-// lightStyles returns the light theme styles.
-func lightStyles() Styles {
-	return Styles{
-		LeftPane: lipgloss.NewStyle().
-			Padding(0, 1),
-		RightPane: lipgloss.NewStyle().
-			Padding(0, 1),
-		ActiveBorder: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("33")),
-		InactiveBorder: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("250")),
-		Title: lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("130")),
-		SelectedStep: lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("33")),
-		NormalStep: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("236")),
-		StepBadge: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("130")),
-		ViewedBadge: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("28")),
-		StatusBar: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245")),
-		StatusKey: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("33")).
-			Bold(true),
-		CommentBorder: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("33")),
-		HelpStyle: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("245")),
-	}
+	return buildStyles(darkPalette)
 }
 
 // DefaultStyles returns the default dark theme styles.
 func DefaultStyles() Styles {
-	return darkStyles()
+	return buildStyles(darkPalette)
 }

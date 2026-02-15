@@ -43,6 +43,7 @@ func customStyle(theme string) ansi.StyleConfig {
 // NewDetailPane creates a new DetailPane.
 func NewDetailPane(width, height int, theme string) *DetailPane {
 	vp := viewport.New(width, height)
+	// Intentionally ignore error: renderContent falls back to plain text when renderer is nil.
 	renderer, _ := glamour.NewTermRenderer(
 		glamour.WithStyles(customStyle(theme)),
 		glamour.WithWordWrap(width-4),
@@ -67,6 +68,7 @@ func (d *DetailPane) SetSize(width, height int) {
 	d.viewport.Width = width
 	d.viewport.Height = height
 
+	// Intentionally ignore error: renderContent falls back to plain text when renderer is nil.
 	d.renderer, _ = glamour.NewTermRenderer(
 		glamour.WithStyles(customStyle(d.theme)),
 		glamour.WithWordWrap(width-4),

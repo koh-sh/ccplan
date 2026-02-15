@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+
+	"github.com/koh-sh/ccplan/internal/locate"
 )
 
 // Input represents the JSON input from a Claude Code PostToolUse hook.
+// It embeds locate.HookInput for the common fields (session_id, transcript_path, cwd).
 type Input struct {
-	SessionID      string     `json:"session_id"`
-	TranscriptPath string     `json:"transcript_path"`
-	CWD            string     `json:"cwd"`
+	locate.HookInput
 	HookEventName  string     `json:"hook_event_name"`
 	PermissionMode string     `json:"permission_mode"`
 	ToolName       string     `json:"tool_name"`

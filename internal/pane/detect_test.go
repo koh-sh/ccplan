@@ -50,8 +50,6 @@ func typeName(s PaneSpawner) string {
 		return "*pane.WezTermSpawner"
 	case *DirectSpawner:
 		return "*pane.DirectSpawner"
-	case *TmuxSpawner:
-		return "*pane.TmuxSpawner"
 	default:
 		return "unknown"
 	}

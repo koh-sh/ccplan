@@ -6,7 +6,7 @@
 
 ---
 
-## 1. delete/approve → viewed フラグへの変更 [S]
+## 1. delete/approve → viewed フラグへの変更 [S] ✅ 実装済み
 
 ### 現状
 - `d` キー: step に `[del]` バッジをトグル（`ActionDelete`）
@@ -35,7 +35,7 @@
 
 ---
 
-## 2. Conventional Comments 対応 [M]
+## 2. Conventional Comments 対応 [M] ✅ 実装済み
 
 ### 現状
 - コメントの action type として `modify`, `delete`, `approve`, `insert-after`, `insert-before` がある
@@ -101,7 +101,7 @@ suggestion: |
 
 ---
 
-## 3. WezTerm ペインサイズの動的調整 [S]
+## 3. WezTerm ペインサイズの動的調整 [S] ✅ 実装済み
 
 ### 現状
 - 固定: `--bottom --percent 80`
@@ -221,7 +221,7 @@ func (t *TerminalAppSpawner) SpawnAndWait(cmd string, args []string) error {
 
 ---
 
-## 7. ステップ検索機能 [M]
+## 7. ステップ検索機能 [M] ✅ 実装済み
 
 ### 仕様
 - `/` キーで検索モード（`ModeSearch`）に入る

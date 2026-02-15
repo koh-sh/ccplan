@@ -140,14 +140,14 @@ The review output generated on submit uses [Conventional Comments](https://conve
 
 Please review and address the following comments on: /path/to/plan.md
 
-## S1.1: JWT verification [suggestion]
-Switch to HS256. Load the key from an environment variable.
+## S1.1: JWT verification
+[suggestion] Switch to HS256. Load the key from an environment variable.
 
-## S2: Update routing [issue]
-Not needed; the existing implementation covers this.
+## S2: Update routing
+[issue] Not needed; the existing implementation covers this.
 
-## S3: Add tests [question]
-Is the coverage target 80% or 90%?
+## S3: Add tests
+[question] Is the coverage target 80% or 90%?
 ```
 
 Labels: `suggestion` (default), `issue`, `question`, `nitpick`, `todo`, `thought`, `note`, `praise`, `chore`

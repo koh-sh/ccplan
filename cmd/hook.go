@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/koh-sh/ccplan/internal/hook"
@@ -10,10 +11,16 @@ import (
 
 // Run executes the hook subcommand.
 func (h *HookCmd) Run() error {
-	input, err := hook.ParseInput(os.Stdin)
+	os.Exit(h.runExit(os.Stdin))
+	return nil // unreachable
+}
+
+// runExit executes the hook logic and returns the exit code.
+func (h *HookCmd) runExit(r io.Reader) int {
+	input, err := hook.ParseInput(r)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ccplan hook: failed to parse input: %v\n", err)
-		os.Exit(0)
+		return 0
 	}
 
 	spawner := pane.ByName(h.Spawner)
@@ -24,9 +31,8 @@ func (h *HookCmd) Run() error {
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ccplan hook: %v\n", err)
-		os.Exit(0)
+		return 0
 	}
 
-	os.Exit(exitCode)
-	return nil // unreachable
+	return exitCode
 }

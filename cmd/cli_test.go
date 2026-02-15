@@ -194,6 +194,33 @@ func TestReviewCmdRunNoTerminal(t *testing.T) {
 	}
 }
 
+func TestHookCmdRunExitParseError(t *testing.T) {
+	h := &HookCmd{Spawner: "auto", Theme: "dark"}
+	code := h.runExit(strings.NewReader("not valid json"))
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0 for parse error", code)
+	}
+}
+
+func TestHookCmdRunExitNonPlanMode(t *testing.T) {
+	h := &HookCmd{Spawner: "auto", Theme: "dark"}
+	input := `{"session_id":"test","transcript_path":"/tmp/t.jsonl","cwd":"/tmp","hook_event_name":"PostToolUse","permission_mode":"default","tool_name":"Write","tool_input":{"file_path":"/tmp/file.go"}}`
+	code := h.runExit(strings.NewReader(input))
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0 for non-plan mode", code)
+	}
+}
+
+func TestHookCmdRunExitSkipEnv(t *testing.T) {
+	t.Setenv("PLAN_REVIEW_SKIP", "1")
+	h := &HookCmd{Spawner: "auto", Theme: "dark"}
+	input := `{"session_id":"test","transcript_path":"/tmp/t.jsonl","cwd":"/tmp","hook_event_name":"PostToolUse","permission_mode":"plan","tool_name":"Write","tool_input":{"file_path":"/tmp/file.go"}}`
+	code := h.runExit(strings.NewReader(input))
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0 when PLAN_REVIEW_SKIP=1", code)
+	}
+}
+
 func TestLocateCmdRunStdinMode(t *testing.T) {
 	tmpDir := t.TempDir()
 	plansDir := filepath.Join(tmpDir, ".claude", "plans")

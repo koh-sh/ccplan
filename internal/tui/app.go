@@ -262,8 +262,8 @@ func (a *App) handleRightPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleCommentMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyCtrlS:
+	switch {
+	case key.Matches(msg, a.keymap.Save):
 		result := a.comment.Result()
 		if result != nil {
 			if a.editCommentIdx >= 0 {
@@ -272,39 +272,34 @@ func (a *App) handleCommentMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				a.stepList.AddComment(a.comment.StepID(), result)
 			}
 		}
-		a.comment.Close()
-		if a.editCommentIdx >= 0 {
-			// Return to comment list after editing
-			comments := a.stepList.GetComments(a.comment.StepID())
-			a.commentList.Open(a.comment.StepID(), comments)
-			a.mode = ModeCommentList
-		} else {
-			a.mode = ModeNormal
-		}
-		a.editCommentIdx = -1
+		a.returnFromComment()
 		a.refreshDetail()
 		return a, nil
 
-	case tea.KeyEsc:
-		a.comment.Close()
-		if a.editCommentIdx >= 0 {
-			// Return to comment list after cancel
-			comments := a.stepList.GetComments(a.comment.StepID())
-			a.commentList.Open(a.comment.StepID(), comments)
-			a.mode = ModeCommentList
-		} else {
-			a.mode = ModeNormal
-		}
-		a.editCommentIdx = -1
+	case key.Matches(msg, a.keymap.Cancel):
+		a.returnFromComment()
 		return a, nil
 
-	case tea.KeyTab:
+	case msg.Type == tea.KeyTab:
 		a.comment.CycleLabel()
 		return a, nil
 	}
 
 	cmd := a.comment.Update(msg)
 	return a, cmd
+}
+
+// returnFromComment closes the comment editor and returns to the appropriate mode.
+func (a *App) returnFromComment() {
+	a.comment.Close()
+	if a.editCommentIdx >= 0 {
+		comments := a.stepList.GetComments(a.comment.StepID())
+		a.commentList.Open(a.comment.StepID(), comments)
+		a.mode = ModeCommentList
+	} else {
+		a.mode = ModeNormal
+	}
+	a.editCommentIdx = -1
 }
 
 func (a *App) handleCommentListMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -608,22 +603,26 @@ func (a *App) renderRightContent(width, height int) string {
 	return a.detail.View()
 }
 
+func (a *App) statusEntry(key, label string) string {
+	return a.styles.StatusKey.Render(key) + " " + label
+}
+
 func (a *App) renderStatusBar() string {
 	if a.mode == ModeComment {
 		return a.styles.StatusBar.Render(
-			a.styles.StatusKey.Render("tab") + " label: " +
+			a.statusEntry("tab", "label:") + " " +
 				a.styles.Title.Render(string(a.comment.Label())) + "  " +
-				a.styles.StatusKey.Render("ctrl+s") + " save  " +
-				a.styles.StatusKey.Render("esc") + " cancel",
+				a.statusEntry("ctrl+s", "save") + "  " +
+				a.statusEntry("esc", "cancel"),
 		)
 	}
 
 	if a.mode == ModeCommentList {
 		return a.styles.StatusBar.Render(
-			a.styles.StatusKey.Render("j/k") + " navigate  " +
-				a.styles.StatusKey.Render("e") + " edit  " +
-				a.styles.StatusKey.Render("d") + " delete  " +
-				a.styles.StatusKey.Render("esc") + " back",
+			a.statusEntry("j/k", "navigate") + "  " +
+				a.statusEntry("e", "edit") + "  " +
+				a.statusEntry("d", "delete") + "  " +
+				a.statusEntry("esc", "back"),
 		)
 	}
 
@@ -632,17 +631,17 @@ func (a *App) renderStatusBar() string {
 	}
 
 	return a.styles.StatusBar.Render(
-		a.styles.StatusKey.Render("j/k") + " navigate  " +
-			a.styles.StatusKey.Render("gg/G") + " top/bottom  " +
-			a.styles.StatusKey.Render("enter") + " toggle  " +
-			a.styles.StatusKey.Render("c") + " comment  " +
-			a.styles.StatusKey.Render("C") + " comments  " +
-			a.styles.StatusKey.Render("v") + " viewed  " +
-			a.styles.StatusKey.Render("/") + " search  " +
-			a.styles.StatusKey.Render("s") + " submit  " +
-			a.styles.StatusKey.Render("tab") + " switch  " +
-			a.styles.StatusKey.Render("?") + " help  " +
-			a.styles.StatusKey.Render("q") + " quit",
+		a.statusEntry("j/k", "navigate") + "  " +
+			a.statusEntry("gg/G", "top/bottom") + "  " +
+			a.statusEntry("enter", "toggle") + "  " +
+			a.statusEntry("c", "comment") + "  " +
+			a.statusEntry("C", "comments") + "  " +
+			a.statusEntry("v", "viewed") + "  " +
+			a.statusEntry("/", "search") + "  " +
+			a.statusEntry("s", "submit") + "  " +
+			a.statusEntry("tab", "switch") + "  " +
+			a.statusEntry("?", "help") + "  " +
+			a.statusEntry("q", "quit"),
 	)
 }
 

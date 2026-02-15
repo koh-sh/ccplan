@@ -4,7 +4,6 @@ package pane
 func AutoDetect() PaneSpawner {
 	spawners := []PaneSpawner{
 		&WezTermSpawner{},
-		// &TmuxSpawner{}, // Phase 4
 	}
 	for _, s := range spawners {
 		if s.Available() {
@@ -20,7 +19,7 @@ func ByName(name string) PaneSpawner {
 	case "wezterm":
 		return &WezTermSpawner{}
 	case "tmux":
-		return &DirectSpawner{} // Phase 4: return &TmuxSpawner{}
+		return &DirectSpawner{}
 	case "auto", "":
 		return AutoDetect()
 	default:

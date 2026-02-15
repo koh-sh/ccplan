@@ -14,8 +14,22 @@ const (
 	maxWaitTime  = 10 * time.Minute
 )
 
+// cmdRunner abstracts command execution for testing.
+type cmdRunner interface {
+	Output(name string, args ...string) ([]byte, error)
+}
+
 // WezTermSpawner spawns commands in a new WezTerm pane.
-type WezTermSpawner struct{}
+type WezTermSpawner struct {
+	runner cmdRunner
+}
+
+func (w *WezTermSpawner) run(name string, args ...string) ([]byte, error) {
+	if w.runner != nil {
+		return w.runner.Output(name, args...)
+	}
+	return exec.Command(name, args...).Output()
+}
 
 func (w *WezTermSpawner) Available() bool {
 	_, err := exec.LookPath("wezterm")
@@ -34,7 +48,7 @@ func (w *WezTermSpawner) SpawnAndWait(cmd string, args []string) error {
 		"cli", "split-pane", direction, "--percent", percent, "--",
 	}, fullCmd...)
 
-	out, err := exec.Command("wezterm", splitArgs...).Output()
+	out, err := w.run("wezterm", splitArgs...)
 	if err != nil {
 		return fmt.Errorf("wezterm split-pane: %w", err)
 	}
@@ -102,7 +116,7 @@ func (w *WezTermSpawner) currentPaneSize() (*paneSize, error) {
 		return nil, fmt.Errorf("WEZTERM_PANE not set")
 	}
 
-	out, err := exec.Command("wezterm", "cli", "list", "--format", "json").Output()
+	out, err := w.run("wezterm", "cli", "list", "--format", "json")
 	if err != nil {
 		return nil, fmt.Errorf("wezterm cli list: %w", err)
 	}
@@ -127,7 +141,7 @@ func (w *WezTermSpawner) currentPaneSize() (*paneSize, error) {
 }
 
 func (w *WezTermSpawner) paneExists(paneID string) bool {
-	out, err := exec.Command("wezterm", "cli", "list", "--format", "json").Output()
+	out, err := w.run("wezterm", "cli", "list", "--format", "json")
 	if err != nil {
 		return false
 	}
