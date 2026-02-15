@@ -7,10 +7,10 @@ import (
 
 func TestParseInput(t *testing.T) {
 	tests := []struct {
-		name      string
-		json      string
-		want      *Input
-		wantErr   bool
+		name    string
+		json    string
+		want    *Input
+		wantErr bool
 	}{
 		{
 			name: "valid PostToolUse input",

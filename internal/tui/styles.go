@@ -14,8 +14,8 @@ type Styles struct {
 	Title        lipgloss.Style
 	SelectedStep lipgloss.Style
 	NormalStep   lipgloss.Style
-	StepBadge   lipgloss.Style
-	ViewedBadge lipgloss.Style
+	StepBadge    lipgloss.Style
+	ViewedBadge  lipgloss.Style
 
 	// Status bar
 	StatusBar lipgloss.Style

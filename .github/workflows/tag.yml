@@ -1,0 +1,34 @@
+name: tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        description: "version tag (vx.x.x)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  tag_push:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Create GitHub App Token
+        uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+      - name: Push git tag
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{github.repository}}/git/refs \
+            -f ref="refs/tags/${{inputs.tag}}" \
+            -f sha="${{github.sha}}"
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

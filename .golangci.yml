@@ -1,0 +1,30 @@
+version: "2"
+linters:
+  enable:
+    - asciicheck
+    - gocritic
+    - misspell
+    - nolintlint
+    - predeclared
+    - unconvert
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofumpt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

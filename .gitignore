@@ -19,6 +19,7 @@ ccplan
 coverage.*
 *.coverprofile
 profile.cov
+cover.html
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

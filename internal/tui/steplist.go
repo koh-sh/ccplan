@@ -11,10 +11,10 @@ import (
 
 // StepListItem is a flattened step for display in the step list.
 type StepListItem struct {
-	Step      *plan.Step
-	Depth     int
-	Expanded  bool
-	Visible   bool
+	Step       *plan.Step
+	Depth      int
+	Expanded   bool
+	Visible    bool
 	IsOverview bool // true for the overview (preamble) entry
 }
 
@@ -298,10 +298,7 @@ func (sl *StepList) Render(width, height int, styles Styles) string {
 	}
 
 	// Calculate available lines for items
-	itemLines := height
-	if itemLines < 1 {
-		itemLines = 1
-	}
+	itemLines := max(height, 1)
 
 	// Adjust scroll offset to keep cursor visible
 	if cursorPos < sl.scrollOffset {
@@ -317,10 +314,7 @@ func (sl *StepList) Render(width, height int, styles Styles) string {
 	var sb strings.Builder
 
 	// Only render items in the visible window
-	end := sl.scrollOffset + itemLines
-	if end > len(visibleIndices) {
-		end = len(visibleIndices)
-	}
+	end := min(sl.scrollOffset+itemLines, len(visibleIndices))
 
 	for vi := sl.scrollOffset; vi < end; vi++ {
 		i := visibleIndices[vi]
@@ -389,7 +383,7 @@ func (sl *StepList) FilterByQuery(query string) {
 	matched := make(map[int]bool)
 	for i, item := range sl.items {
 		if item.IsOverview {
-			if strings.Contains("overview", query) {
+			if strings.Contains("overview", query) { //nolint:gocritic // intentional: match when query is a substring of "overview"
 				matched[i] = true
 			}
 			continue
@@ -458,15 +452,15 @@ func (sl *StepList) ClearFilter() {
 }
 
 // truncate truncates a string to fit within max display-width cells, with ellipsis.
-func truncate(s string, max int) string {
-	if max <= 0 {
+func truncate(s string, maxWidth int) string {
+	if maxWidth <= 0 {
 		return ""
 	}
-	if runewidth.StringWidth(s) <= max {
+	if runewidth.StringWidth(s) <= maxWidth {
 		return s
 	}
-	if max <= 3 {
-		return runewidth.Truncate(s, max, "")
+	if maxWidth <= 3 {
+		return runewidth.Truncate(s, maxWidth, "")
 	}
-	return runewidth.Truncate(s, max, "...")
+	return runewidth.Truncate(s, maxWidth, "...")
 }

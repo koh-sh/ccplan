@@ -124,7 +124,7 @@ func TestStepListScrollsWithCursor(t *testing.T) {
 	a := model.(*App)
 
 	// Move cursor down past the visible area
-	for i := 0; i < 25; i++ {
+	for range 25 {
 		a.stepList.CursorDown()
 	}
 
@@ -153,7 +153,7 @@ func TestGGGoesToTop(t *testing.T) {
 	a := model.(*App)
 
 	// Move cursor down several steps
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		a.stepList.CursorDown()
 	}
 	if a.stepList.Selected().ID == "S1" {

@@ -1,0 +1,22 @@
+name: Go Fix
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Run Go Fix
+        run: |
+          test -z "$(go fix -diff ./...)"

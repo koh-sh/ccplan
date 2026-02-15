@@ -26,7 +26,7 @@ const (
 type Focus int
 
 const (
-	FocusLeft  Focus = iota
+	FocusLeft Focus = iota
 	FocusRight
 )
 
@@ -54,9 +54,9 @@ type App struct {
 	ready  bool
 	opts   AppOptions
 
-	result          AppResult
-	pendingG        bool // gg chord: true when first 'g' was pressed
-	editCommentIdx  int  // index of comment being edited in comment list mode (-1 = new)
+	result         AppResult
+	pendingG       bool // gg chord: true when first 'g' was pressed
+	editCommentIdx int  // index of comment being edited in comment list mode (-1 = new)
 }
 
 // AppOptions configures the TUI appearance.
@@ -254,9 +254,9 @@ func (a *App) handleLeftPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (a *App) handleRightPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, a.keymap.Up):
-		a.detail.Viewport().LineUp(1)
+		a.detail.Viewport().ScrollUp(1)
 	case key.Matches(msg, a.keymap.Down):
-		a.detail.Viewport().LineDown(1)
+		a.detail.Viewport().ScrollDown(1)
 	}
 	return a, nil
 }
@@ -308,8 +308,7 @@ func (a *App) handleCommentMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleCommentListMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEsc:
+	if msg.Type == tea.KeyEsc {
 		a.commentList.Close()
 		a.mode = ModeNormal
 		a.refreshDetail()
@@ -377,8 +376,7 @@ func (a *App) handleConfirmMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleHelpMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEsc:
+	if msg.Type == tea.KeyEsc {
 		a.mode = ModeNormal
 		return a, nil
 	}
@@ -491,10 +489,7 @@ func (a *App) titleBarHeight() int {
 }
 
 func (a *App) contentHeight() int {
-	h := a.height - a.titleBarHeight() - 3
-	if h < 1 {
-		h = 1
-	}
+	h := max(a.height-a.titleBarHeight()-3, 1)
 	return h
 }
 
@@ -596,10 +591,7 @@ func (a *App) renderRightContent(width, height int) string {
 	switch a.mode {
 	case ModeComment:
 		commentHeight := 7
-		detailHeight := height - commentHeight - 2
-		if detailHeight < 1 {
-			detailHeight = 1
-		}
+		detailHeight := max(height-commentHeight-2, 1)
 
 		a.detail.SetSize(width, detailHeight)
 		detailView := a.detail.View()
