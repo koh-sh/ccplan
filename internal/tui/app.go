@@ -50,7 +50,8 @@ type App struct {
 	ready  bool
 	opts   AppOptions
 
-	result AppResult
+	result   AppResult
+	pendingG bool // gg chord: true when first 'g' was pressed
 }
 
 // AppOptions configures the TUI appearance.
@@ -122,6 +123,36 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Handle 'gg' chord (second g after pending g)
+	if a.pendingG {
+		a.pendingG = false
+		if msg.String() == "g" {
+			if a.focus == FocusLeft {
+				a.stepList.CursorTop()
+				a.refreshDetail()
+			} else {
+				a.detail.Viewport().GotoTop()
+			}
+			return a, nil
+		}
+		// Not 'g' after pending g — fall through to normal handling
+	}
+
+	// Check for 'g' (start of gg chord) and 'G' (go to bottom)
+	switch msg.String() {
+	case "g":
+		a.pendingG = true
+		return a, nil
+	case "G":
+		if a.focus == FocusLeft {
+			a.stepList.CursorBottom()
+			a.refreshDetail()
+		} else {
+			a.detail.Viewport().GotoBottom()
+		}
+		return a, nil
+	}
+
 	switch {
 	case key.Matches(msg, a.keymap.Quit):
 		if a.stepList.HasComments() {
@@ -445,6 +476,7 @@ func (a *App) renderStatusBar() string {
 
 	return a.styles.StatusBar.Render(
 		a.styles.StatusKey.Render("j/k") + " navigate  " +
+			a.styles.StatusKey.Render("gg/G") + " top/bottom  " +
 			a.styles.StatusKey.Render("enter") + " toggle  " +
 			a.styles.StatusKey.Render("c") + " comment  " +
 			a.styles.StatusKey.Render("d") + " delete  " +
@@ -487,6 +519,8 @@ func (a *App) renderHelp() string {
 
   Navigation:
     j/k, Up/Down   Move cursor up/down
+    gg              Go to top
+    G               Go to bottom
     Enter           Toggle expand/collapse
     l/Right         Expand step
     h/Left          Collapse step (or go to parent)

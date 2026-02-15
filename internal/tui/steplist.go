@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/koh-sh/ccplan/internal/plan"
+	"github.com/mattn/go-runewidth"
 )
 
 // StepListItem is a flattened step for display in the step list.
@@ -71,6 +73,26 @@ func (sl *StepList) CursorUp() {
 // CursorDown moves the cursor down to the next visible item.
 func (sl *StepList) CursorDown() {
 	for i := sl.cursor + 1; i < len(sl.items); i++ {
+		if sl.items[i].Visible {
+			sl.cursor = i
+			return
+		}
+	}
+}
+
+// CursorTop moves the cursor to the first visible item.
+func (sl *StepList) CursorTop() {
+	for i := 0; i < len(sl.items); i++ {
+		if sl.items[i].Visible {
+			sl.cursor = i
+			return
+		}
+	}
+}
+
+// CursorBottom moves the cursor to the last visible item.
+func (sl *StepList) CursorBottom() {
+	for i := len(sl.items) - 1; i >= 0; i-- {
 		if sl.items[i].Visible {
 			sl.cursor = i
 			return
@@ -289,7 +311,7 @@ func (sl *StepList) Render(width, height int, styles Styles) string {
 
 			badge := sl.renderBadge(item.Step.ID, styles)
 			stepText := fmt.Sprintf("%s%s %s %s", indent, prefix, item.Step.ID, item.Step.Title)
-			line = truncate(stepText, width-4-len(badge)) + badge
+			line = truncate(stepText, width-4-lipgloss.Width(badge)) + badge
 		}
 
 		if i == sl.cursor {
@@ -320,16 +342,16 @@ func (sl *StepList) renderBadge(stepID string, styles Styles) string {
 	}
 }
 
-// truncate truncates a string to max length with ellipsis.
+// truncate truncates a string to fit within max display-width cells, with ellipsis.
 func truncate(s string, max int) string {
 	if max <= 0 {
 		return ""
 	}
-	if len(s) <= max {
+	if runewidth.StringWidth(s) <= max {
 		return s
 	}
 	if max <= 3 {
-		return s[:max]
+		return runewidth.Truncate(s, max, "")
 	}
-	return s[:max-3] + "..."
+	return runewidth.Truncate(s, max, "...")
 }
