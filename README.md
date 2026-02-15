@@ -65,10 +65,10 @@ ccplan hook
 
 | Flag | Description |
 |------|-------------|
-| `--spawner` | Terminal multiplexer: `auto` (default), `wezterm`, `tmux`, `direct` |
+| `--spawner` | Terminal multiplexer: `auto` (default), `wezterm`, `tmux` |
 | `--theme` | Color theme: `dark` (default), `light` |
 
-> **Note:** Currently only WezTerm is supported as a terminal multiplexer spawner. tmux support is not yet implemented. `auto` will try WezTerm first, then fall back to `direct` (runs in the same terminal).
+> **Note:** Currently only WezTerm is supported as a terminal multiplexer spawner. tmux support is not yet implemented. `auto` will try WezTerm first, then fall back to running in the same terminal.
 
 ## Claude Code Hook Setup
 
