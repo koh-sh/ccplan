@@ -6,11 +6,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ccplan is a Go CLI tool for reviewing Claude Code-generated plans in an interactive TUI. It parses Markdown plan files, displays them in a 2-pane interface, and supports inline commenting with feedback integration via Claude Code hooks.
 
+## Absolute Rule
+
+**`make ci` must always pass.** Before finishing any code change, run `make ci` and confirm all steps succeed. This is non-negotiable — do not leave the codebase in a state where `make ci` fails.
+
+`make ci` runs: `fmt` → `fix` → `lint` → `build` → `cov` (test with coverage). If any step fails, fix it before considering the task complete.
+
 ## Build & Test Commands
 
 ```bash
-go build -o ccplan .                    # Build binary
-go test ./...                           # Run all tests
+make ci                                 # Run full CI pipeline (MUST pass)
+make build                              # Build binary
+make test                               # Run all tests with tparse
+make lint                               # Run golangci-lint with --fix
+make fmt                                # Format with gofumpt
+make fix                                # Run go fix (modernize)
 go test -v ./internal/plan              # Run tests for a specific package
 go test -run TestParsePreamble ./internal/plan  # Run a single test
 ```
