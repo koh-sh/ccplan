@@ -56,8 +56,9 @@ type App struct {
 
 // AppOptions configures the TUI appearance.
 type AppOptions struct {
-	Theme   string // "dark" or "light"
-	NoColor bool
+	Theme    string // "dark" or "light"
+	NoColor  bool
+	FilePath string // plan file path (displayed in title bar)
 }
 
 // NewApp creates a new App model.
@@ -356,12 +357,27 @@ func (a *App) refreshDetail() {
 }
 
 func (a *App) renderTitleBar() string {
-	if a.plan.Title == "" || a.width == 0 {
+	if a.width == 0 {
 		return ""
 	}
+
+	innerWidth := a.width - 2
+	var parts []string
+	if a.plan.Title != "" {
+		parts = append(parts, a.plan.Title)
+	}
+	if a.opts.FilePath != "" {
+		parts = append(parts, "("+a.opts.FilePath+")")
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	content := a.styles.Title.Render(strings.Join(parts, " "))
 	return a.styles.InactiveBorder.
-		Width(a.width - 2).
-		Render(a.styles.Title.Render(a.plan.Title))
+		Width(innerWidth).
+		Render(content)
 }
 
 func (a *App) titleBarHeight() int {

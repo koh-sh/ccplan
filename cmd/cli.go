@@ -27,8 +27,8 @@ type ReviewCmd struct {
 	Output     string `enum:"clipboard,stdout,file" default:"clipboard" help:"Output method"`
 	OutputPath string `help:"File path for file output" type:"path"`
 	StatusPath string `help:"File path to write exit status" type:"path"`
-	Theme      string `enum:"dark,light" default:"dark" help:"Color theme"`
-	NoColor    bool   `help:"Disable colors"`
+	Theme   string `enum:"dark,light" default:"dark" help:"Color theme"`
+	NoColor bool   `help:"Disable colors"`
 }
 
 // LocateCmd is the locate subcommand.

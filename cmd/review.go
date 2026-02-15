@@ -26,8 +26,9 @@ func (r *ReviewCmd) Run() error {
 
 	// Create and run TUI
 	app := tui.NewApp(p, tui.AppOptions{
-		Theme:   r.Theme,
-		NoColor: r.NoColor,
+		Theme:    r.Theme,
+		NoColor:  r.NoColor,
+		FilePath: r.PlanFile,
 	})
 	prog := tea.NewProgram(app, tea.WithAltScreen())
 	finalModel, err := prog.Run()
