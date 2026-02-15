@@ -10,10 +10,10 @@ type KeyMap struct {
 	Collapse key.Binding
 	Toggle   key.Binding
 	Tab      key.Binding
-	Comment  key.Binding
-	Delete   key.Binding
-	Approve  key.Binding
-	Submit   key.Binding
+	Comment key.Binding
+	Viewed  key.Binding
+	Search  key.Binding
+	Submit  key.Binding
 	Quit     key.Binding
 	Help     key.Binding
 	Save     key.Binding
@@ -51,13 +51,13 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("c"),
 			key.WithHelp("c", "comment"),
 		),
-		Delete: key.NewBinding(
-			key.WithKeys("d"),
-			key.WithHelp("d", "delete"),
+		Viewed: key.NewBinding(
+			key.WithKeys("v"),
+			key.WithHelp("v", "viewed"),
 		),
-		Approve: key.NewBinding(
-			key.WithKeys("a"),
-			key.WithHelp("a", "approve"),
+		Search: key.NewBinding(
+			key.WithKeys("/"),
+			key.WithHelp("/", "search"),
 		),
 		Submit: key.NewBinding(
 			key.WithKeys("s"),

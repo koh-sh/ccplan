@@ -51,16 +51,36 @@ type ReviewComment struct {
 	Body   string     // Comment body text
 }
 
-// ActionType is the type of review action.
+// ActionType is the type of review action, based on Conventional Comments labels.
 type ActionType string
 
 const (
-	ActionModify       ActionType = "modify"
-	ActionDelete       ActionType = "delete"
-	ActionApprove      ActionType = "approve"
-	ActionInsertAfter  ActionType = "insert-after"
-	ActionInsertBefore ActionType = "insert-before"
+	ActionSuggestion ActionType = "suggestion"
+	ActionIssue      ActionType = "issue"
+	ActionQuestion   ActionType = "question"
+	ActionNitpick    ActionType = "nitpick"
+	ActionTodo       ActionType = "todo"
+	ActionThought    ActionType = "thought"
+	ActionNote       ActionType = "note"
+	ActionPraise     ActionType = "praise"
+	ActionChore      ActionType = "chore"
 )
+
+// ActionLabels is the ordered list of action labels for Tab cycling.
+var ActionLabels = []ActionType{
+	ActionSuggestion,
+	ActionIssue,
+	ActionQuestion,
+	ActionNitpick,
+	ActionTodo,
+	ActionThought,
+	ActionNote,
+	ActionPraise,
+	ActionChore,
+}
+
+// DefaultAction is the default action type for new comments.
+const DefaultAction = ActionSuggestion
 
 // ReviewResult holds the entire review output.
 type ReviewResult struct {

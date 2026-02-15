@@ -14,9 +14,8 @@ type Styles struct {
 	Title        lipgloss.Style
 	SelectedStep lipgloss.Style
 	NormalStep   lipgloss.Style
-	StepBadge    lipgloss.Style
-	DeleteBadge  lipgloss.Style
-	ApproveBadge lipgloss.Style
+	StepBadge   lipgloss.Style
+	ViewedBadge lipgloss.Style
 
 	// Status bar
 	StatusBar lipgloss.Style
@@ -64,9 +63,7 @@ func darkStyles() Styles {
 			Foreground(lipgloss.Color("252")),
 		StepBadge: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("170")),
-		DeleteBadge: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")),
-		ApproveBadge: lipgloss.NewStyle().
+		ViewedBadge: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("82")),
 		StatusBar: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240")),
@@ -104,9 +101,7 @@ func lightStyles() Styles {
 			Foreground(lipgloss.Color("236")),
 		StepBadge: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("130")),
-		DeleteBadge: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("160")),
-		ApproveBadge: lipgloss.NewStyle().
+		ViewedBadge: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("28")),
 		StatusBar: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245")),
@@ -136,8 +131,7 @@ func plainStyles() Styles {
 		SelectedStep: lipgloss.NewStyle().Bold(true),
 		NormalStep:   lipgloss.NewStyle(),
 		StepBadge:    lipgloss.NewStyle(),
-		DeleteBadge:  lipgloss.NewStyle(),
-		ApproveBadge: lipgloss.NewStyle(),
+		ViewedBadge: lipgloss.NewStyle(),
 		StatusBar:    lipgloss.NewStyle(),
 		StatusKey:    lipgloss.NewStyle().Bold(true),
 		CommentBorder: lipgloss.NewStyle().

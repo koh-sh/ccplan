@@ -24,6 +24,7 @@ type StepList struct {
 	cursor       int
 	scrollOffset int
 	comments     map[string]*plan.ReviewComment // stepID -> comment
+	viewed       map[string]bool                // stepID -> viewed flag
 	plan         *plan.Plan
 }
 
@@ -31,6 +32,7 @@ type StepList struct {
 func NewStepList(p *plan.Plan) *StepList {
 	sl := &StepList{
 		comments: make(map[string]*plan.ReviewComment),
+		viewed:   make(map[string]bool),
 		plan:     p,
 	}
 
@@ -205,11 +207,21 @@ func (sl *StepList) IsOverviewSelected() bool {
 
 // SetComment sets a comment for a step.
 func (sl *StepList) SetComment(stepID string, comment *plan.ReviewComment) {
-	if comment == nil || (comment.Body == "" && comment.Action == plan.ActionModify) {
+	if comment == nil || comment.Body == "" {
 		delete(sl.comments, stepID)
 	} else {
 		sl.comments[stepID] = comment
 	}
+}
+
+// ToggleViewed toggles the viewed flag for a step.
+func (sl *StepList) ToggleViewed(stepID string) {
+	sl.viewed[stepID] = !sl.viewed[stepID]
+}
+
+// IsViewed returns whether a step is marked as viewed.
+func (sl *StepList) IsViewed(stepID string) bool {
+	return sl.viewed[stepID]
 }
 
 // GetComment returns the comment for a step, or nil if none.
@@ -316,20 +328,102 @@ func (sl *StepList) Render(width, height int, styles Styles) string {
 	return sb.String()
 }
 
-// renderBadge renders the badge for a step (comment count, delete mark, approve mark).
+// renderBadge renders the badge for a step (comment indicator, viewed mark).
 func (sl *StepList) renderBadge(stepID string, styles Styles) string {
-	c := sl.comments[stepID]
-	if c == nil {
-		return ""
+	hasComment := sl.comments[stepID] != nil
+	isViewed := sl.viewed[stepID]
+
+	var badge string
+	if hasComment {
+		badge += styles.StepBadge.Render(" [*]")
 	}
-	switch c.Action {
-	case plan.ActionDelete:
-		return styles.DeleteBadge.Render(" [del]")
-	case plan.ActionApprove:
-		return styles.ApproveBadge.Render(" [ok]")
-	default:
-		return styles.StepBadge.Render(" [*]")
+	if isViewed {
+		badge += styles.ViewedBadge.Render(" [✓]")
 	}
+	return badge
+}
+
+// FilterByQuery filters the step list to show only steps matching the query.
+// Matching is case-insensitive against step ID + Title.
+// If a child matches, its ancestors are shown. If a parent matches, its children are shown.
+func (sl *StepList) FilterByQuery(query string) {
+	if query == "" {
+		sl.ClearFilter()
+		return
+	}
+
+	query = strings.ToLower(query)
+
+	// First pass: mark direct matches
+	matched := make(map[int]bool)
+	for i, item := range sl.items {
+		if item.IsOverview {
+			if strings.Contains("overview", query) {
+				matched[i] = true
+			}
+			continue
+		}
+		if item.Step == nil {
+			continue
+		}
+		text := strings.ToLower(item.Step.ID + " " + item.Step.Title)
+		if strings.Contains(text, query) {
+			matched[i] = true
+		}
+	}
+
+	// Second pass: if a step matches, show its ancestors
+	ancestorVisible := make(map[*plan.Step]bool)
+	for i, item := range sl.items {
+		if !matched[i] || item.Step == nil {
+			continue
+		}
+		parent := item.Step.Parent
+		for parent != nil {
+			ancestorVisible[parent] = true
+			parent = parent.Parent
+		}
+	}
+
+	// Third pass: if a step matches, show its descendants
+	descendantVisible := make(map[*plan.Step]bool)
+	for i, item := range sl.items {
+		if !matched[i] || item.Step == nil {
+			continue
+		}
+		var markDescendants func(steps []*plan.Step)
+		markDescendants = func(steps []*plan.Step) {
+			for _, s := range steps {
+				descendantVisible[s] = true
+				markDescendants(s.Children)
+			}
+		}
+		markDescendants(item.Step.Children)
+	}
+
+	// Apply visibility
+	for i := range sl.items {
+		item := &sl.items[i]
+		if item.IsOverview {
+			item.Visible = matched[i]
+			continue
+		}
+		if item.Step == nil {
+			item.Visible = false
+			continue
+		}
+		item.Visible = matched[i] || ancestorVisible[item.Step] || descendantVisible[item.Step]
+	}
+
+	// Move cursor to first visible item if current is hidden
+	if sl.cursor < len(sl.items) && !sl.items[sl.cursor].Visible {
+		sl.CursorTop()
+	}
+}
+
+// ClearFilter resets visibility to respect only expansion state.
+func (sl *StepList) ClearFilter() {
+	sl.updateVisibility()
 }
 
 // truncate truncates a string to fit within max display-width cells, with ellipsis.

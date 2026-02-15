@@ -10,10 +10,10 @@ import (
 
 // CommentEditor wraps a textarea for entering review comments.
 type CommentEditor struct {
-	textarea textarea.Model
-	stepID   string
-	action   plan.ActionType
-	active   bool
+	textarea   textarea.Model
+	stepID     string
+	active     bool
+	labelIndex int // index into plan.ActionLabels
 }
 
 // NewCommentEditor creates a new CommentEditor.
@@ -35,14 +35,24 @@ func (c *CommentEditor) Open(stepID string, existing *plan.ReviewComment) {
 	c.active = true
 
 	if existing != nil {
-		c.action = existing.Action
+		c.labelIndex = c.labelIndexFor(existing.Action)
 		c.textarea.SetValue(existing.Body)
 	} else {
-		c.action = plan.ActionModify
+		c.labelIndex = 0 // default: suggestion
 		c.textarea.SetValue("")
 	}
 
 	c.textarea.Focus()
+}
+
+// labelIndexFor returns the index of the given action in ActionLabels.
+func (c *CommentEditor) labelIndexFor(action plan.ActionType) int {
+	for i, label := range plan.ActionLabels {
+		if label == action {
+			return i
+		}
+	}
+	return 0
 }
 
 // Close closes the comment editor.
@@ -61,37 +71,28 @@ func (c *CommentEditor) StepID() string {
 	return c.stepID
 }
 
+// Label returns the current action label.
+func (c *CommentEditor) Label() plan.ActionType {
+	return plan.ActionLabels[c.labelIndex]
+}
+
+// CycleLabel cycles to the next action label.
+func (c *CommentEditor) CycleLabel() {
+	c.labelIndex = (c.labelIndex + 1) % len(plan.ActionLabels)
+}
+
 // Result returns the review comment from the editor content.
-// Returns nil if the body is empty and action is modify.
+// Returns nil if the body is empty.
 func (c *CommentEditor) Result() *plan.ReviewComment {
 	body := strings.TrimSpace(c.textarea.Value())
 
-	// Parse action prefix from body
-	action := c.action
-	for _, prefix := range []struct {
-		text   string
-		action plan.ActionType
-	}{
-		{"modify:", plan.ActionModify},
-		{"delete:", plan.ActionDelete},
-		{"approve:", plan.ActionApprove},
-		{"insert-after:", plan.ActionInsertAfter},
-		{"insert-before:", plan.ActionInsertBefore},
-	} {
-		if strings.HasPrefix(body, prefix.text) {
-			action = prefix.action
-			body = strings.TrimSpace(strings.TrimPrefix(body, prefix.text))
-			break
-		}
-	}
-
-	if body == "" && action == plan.ActionModify {
+	if body == "" {
 		return nil
 	}
 
 	return &plan.ReviewComment{
 		StepID: c.stepID,
-		Action: action,
+		Action: plan.ActionLabels[c.labelIndex],
 		Body:   body,
 	}
 }
@@ -111,9 +112,4 @@ func (c *CommentEditor) View() string {
 // SetWidth sets the width of the textarea.
 func (c *CommentEditor) SetWidth(w int) {
 	c.textarea.SetWidth(w)
-}
-
-// SetAction sets the action type for the comment.
-func (c *CommentEditor) SetAction(action plan.ActionType) {
-	c.action = action
 }

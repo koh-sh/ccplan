@@ -18,6 +18,7 @@ const (
 	ModeComment                // Comment input
 	ModeConfirm                // Confirmation dialog
 	ModeHelp                   // Help overlay
+	ModeSearch                 // Step search
 )
 
 // Focus represents which pane has focus.
@@ -40,6 +41,7 @@ type App struct {
 	stepList *StepList
 	detail   *DetailPane
 	comment  *CommentEditor
+	search   *SearchBar
 	keymap   KeyMap
 	styles   Styles
 
@@ -67,6 +69,7 @@ func NewApp(p *plan.Plan, opts AppOptions) *App {
 		plan:     p,
 		stepList: NewStepList(p),
 		comment:  NewCommentEditor(),
+		search:   NewSearchBar(),
 		keymap:   DefaultKeyMap(),
 		styles:   stylesForTheme(opts.Theme, opts.NoColor),
 		opts:     opts,
@@ -106,6 +109,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, cmd
 	}
 
+	if a.mode == ModeSearch {
+		cmd := a.search.Update(msg)
+		return a, cmd
+	}
+
 	return a, nil
 }
 
@@ -119,6 +127,8 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.handleConfirmMode(msg)
 	case ModeHelp:
 		return a.handleHelpMode(msg)
+	case ModeSearch:
+		return a.handleSearchMode(msg)
 	}
 	return a, nil
 }
@@ -212,43 +222,15 @@ func (a *App) handleLeftPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, a.comment.textarea.Focus()
 		}
 
-	case key.Matches(msg, a.keymap.Delete):
+	case key.Matches(msg, a.keymap.Viewed):
 		if step := a.stepList.Selected(); step != nil {
-			existing := a.stepList.GetComment(step.ID)
-			if existing != nil && existing.Action == plan.ActionDelete {
-				a.stepList.SetComment(step.ID, nil)
-			} else {
-				body := ""
-				if existing != nil {
-					body = existing.Body
-				}
-				a.stepList.SetComment(step.ID, &plan.ReviewComment{
-					StepID: step.ID,
-					Action: plan.ActionDelete,
-					Body:   body,
-				})
-			}
-			a.refreshDetail()
+			a.stepList.ToggleViewed(step.ID)
 		}
 
-	case key.Matches(msg, a.keymap.Approve):
-		if step := a.stepList.Selected(); step != nil {
-			existing := a.stepList.GetComment(step.ID)
-			if existing != nil && existing.Action == plan.ActionApprove {
-				a.stepList.SetComment(step.ID, nil)
-			} else {
-				body := ""
-				if existing != nil {
-					body = existing.Body
-				}
-				a.stepList.SetComment(step.ID, &plan.ReviewComment{
-					StepID: step.ID,
-					Action: plan.ActionApprove,
-					Body:   body,
-				})
-			}
-			a.refreshDetail()
-		}
+	case key.Matches(msg, a.keymap.Search):
+		a.search.Open()
+		a.mode = ModeSearch
+		return a, a.search.input.Focus()
 	}
 
 	return a, nil
@@ -277,6 +259,10 @@ func (a *App) handleCommentMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyEsc:
 		a.comment.Close()
 		a.mode = ModeNormal
+		return a, nil
+
+	case tea.KeyTab:
+		a.comment.CycleLabel()
 		return a, nil
 	}
 
@@ -319,18 +305,48 @@ func (a *App) handleHelpMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+func (a *App) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		// Confirm search, stay at current cursor position
+		a.search.Close()
+		a.mode = ModeNormal
+		a.refreshDetail()
+		return a, nil
+
+	case tea.KeyEsc:
+		// Cancel search, restore full list
+		a.search.Close()
+		a.stepList.ClearFilter()
+		a.mode = ModeNormal
+		a.refreshDetail()
+		return a, nil
+	}
+
+	// Handle navigation within search results
+	switch {
+	case key.Matches(msg, a.keymap.Up):
+		a.stepList.CursorUp()
+		a.refreshDetail()
+		return a, nil
+	case key.Matches(msg, a.keymap.Down):
+		a.stepList.CursorDown()
+		a.refreshDetail()
+		return a, nil
+	}
+
+	// Update search input
+	cmd := a.search.Update(msg)
+	// Apply filter with updated query
+	a.stepList.FilterByQuery(a.search.Query())
+	a.refreshDetail()
+	return a, cmd
+}
+
 func (a *App) submitReview() (tea.Model, tea.Cmd) {
 	review := a.stepList.BuildReviewResult()
 
-	hasNonApprove := false
-	for _, c := range review.Comments {
-		if c.Action != plan.ActionApprove {
-			hasNonApprove = true
-			break
-		}
-	}
-
-	if len(review.Comments) == 0 || !hasNonApprove {
+	if len(review.Comments) == 0 {
 		a.result.Status = plan.StatusApproved
 	} else {
 		a.result.Status = plan.StatusSubmitted
@@ -501,7 +517,7 @@ func (a *App) renderRightContent(width, height int) string {
 		a.detail.SetSize(width, detailHeight)
 		detailView := a.detail.View()
 
-		separator := a.styles.CommentBorder.Width(width - 2).Render("Comment")
+		separator := a.styles.CommentBorder.Width(width - 2).Render("Comment [" + string(a.comment.Label()) + "]")
 		commentView := a.comment.View()
 
 		return detailView + "\n" + separator + "\n" + commentView
@@ -513,9 +529,15 @@ func (a *App) renderRightContent(width, height int) string {
 func (a *App) renderStatusBar() string {
 	if a.mode == ModeComment {
 		return a.styles.StatusBar.Render(
-			a.styles.StatusKey.Render("ctrl+s") + " save  " +
+			a.styles.StatusKey.Render("tab") + " label: " +
+				a.styles.Title.Render(string(a.comment.Label())) + "  " +
+				a.styles.StatusKey.Render("ctrl+s") + " save  " +
 				a.styles.StatusKey.Render("esc") + " cancel",
 		)
+	}
+
+	if a.mode == ModeSearch {
+		return a.search.View()
 	}
 
 	return a.styles.StatusBar.Render(
@@ -523,8 +545,8 @@ func (a *App) renderStatusBar() string {
 			a.styles.StatusKey.Render("gg/G") + " top/bottom  " +
 			a.styles.StatusKey.Render("enter") + " toggle  " +
 			a.styles.StatusKey.Render("c") + " comment  " +
-			a.styles.StatusKey.Render("d") + " delete  " +
-			a.styles.StatusKey.Render("a") + " approve  " +
+			a.styles.StatusKey.Render("v") + " viewed  " +
+			a.styles.StatusKey.Render("/") + " search  " +
 			a.styles.StatusKey.Render("s") + " submit  " +
 			a.styles.StatusKey.Render("tab") + " switch  " +
 			a.styles.StatusKey.Render("?") + " help  " +
@@ -572,8 +594,8 @@ func (a *App) renderHelp() string {
 
   Review:
     c               Add/edit comment on selected step
-    d               Toggle delete mark
-    a               Toggle approve mark
+    v               Toggle viewed mark
+    /               Search steps
     s               Submit review
 
   Comment Editor:
