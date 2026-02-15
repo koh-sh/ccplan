@@ -15,9 +15,6 @@ type Step struct {
 	Body     string  // Markdown text from heading to next heading
 	Children []*Step // Sub-steps (lower-level headings)
 	Parent   *Step   // Parent step (nil for top-level)
-
-	FilePaths    []string // File paths found in body (best-effort)
-	Dependencies []string // References to other steps (best-effort)
 }
 
 // AllSteps returns a flat list of all steps in depth-first order.
