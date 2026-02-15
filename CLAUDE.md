@@ -21,9 +21,12 @@ make test                               # Run all tests with tparse
 make lint                               # Run golangci-lint with --fix
 make fmt                                # Format with gofumpt
 make fix                                # Run go fix (modernize)
+make tidy                               # Run go mod tidy -v
 go test -v ./internal/plan              # Run tests for a specific package
 go test -run TestParsePreamble ./internal/plan  # Run a single test
 ```
+
+Linter config: `.golangci.yml` (enabled: asciicheck, gocritic, misspell, nolintlint, predeclared, unconvert; formatters: gci, gofumpt).
 
 ## Architecture
 
@@ -37,7 +40,7 @@ go test -run TestParsePreamble ./internal/plan  # Run a single test
 - **`internal/tui/`** — Bubble Tea TUI. 2-pane layout: `StepList` (left) + `DetailPane` (right). Mode-based state machine: `ModeNormal` → `ModeComment` → `ModeCommentList` → `ModeConfirm` → `ModeHelp` → `ModeSearch`.
 - **`internal/locate/`** — Plan file discovery from Claude Code transcript JSONL files. `plansDirectory` resolution chain: `.claude/settings.local.json` → `.claude/settings.json` → `~/.claude/settings.json` → `~/.claude/plans/`.
 - **`internal/hook/`** — PostToolUse hook orchestration. Parses stdin JSON from Claude Code, validates `permission_mode == "plan"`, spawns review in a pane, returns exit code 0 (continue) or 2 (feedback).
-- **`internal/pane/`** — Terminal multiplexer abstraction. `PaneSpawner` interface with WezTerm, tmux (stub), and Direct (fallback) implementations. `AutoDetect()` tries WezTerm → tmux → Direct.
+- **`internal/pane/`** — Terminal multiplexer abstraction. `PaneSpawner` interface with WezTerm and Direct (fallback) implementations. tmux is stub only (`ByName("tmux")` returns DirectSpawner). `AutoDetect()` tries WezTerm → Direct. WezTerm spawner uses pixel dimensions for split direction (right 50% or bottom 80%).
 
 ### Key Data Flow
 

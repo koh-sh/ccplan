@@ -5,9 +5,21 @@ Add inline review comments to each step and send feedback back to Claude Code.
 
 ## Install
 
+### mise
+
+```bash
+mise use -g github:koh-sh/ccplan
+```
+
+### go install
+
 ```bash
 go install github.com/koh-sh/ccplan@latest
 ```
+
+### Pre-built binary
+
+Download the latest release from the [Releases page](https://github.com/koh-sh/ccplan/releases).
 
 ## Subcommands
 
@@ -53,8 +65,10 @@ ccplan hook
 
 | Flag | Description |
 |------|-------------|
-| `--spawner` | Terminal multiplexer: `auto` (default), `wezterm`, `tmux` |
+| `--spawner` | Terminal multiplexer: `auto` (default), `wezterm`, `tmux`, `direct` |
 | `--theme` | Color theme: `dark` (default), `light` |
+
+> **Note:** Currently only WezTerm is supported as a terminal multiplexer spawner. tmux support is not yet implemented. `auto` will try WezTerm first, then fall back to `direct` (runs in the same terminal).
 
 ## Claude Code Hook Setup
 
@@ -109,7 +123,8 @@ Set `PLAN_REVIEW_SKIP=1` to temporarily disable the hook.
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Cycle comment label |
+| `Tab` | Cycle comment label (forward) |
+| `Shift+Tab` | Cycle comment label (reverse) |
 | `Ctrl+S` | Save comment |
 | `Esc` | Cancel |
 
@@ -150,4 +165,4 @@ Please review and address the following comments on: /path/to/plan.md
 [question] Is the coverage target 80% or 90%?
 ```
 
-Labels: `suggestion` (default), `issue`, `question`, `nitpick`, `todo`, `thought`, `note`, `praise`, `chore`
+Labels: `suggestion`, `issue`, `question`, `nitpick`, `todo` (default), `thought`, `note`, `praise`, `chore`
