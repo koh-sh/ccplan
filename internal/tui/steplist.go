@@ -256,12 +256,8 @@ func (sl *StepList) Render(width, height int, styles Styles) string {
 		}
 	}
 
-	// Calculate available lines for items (title takes 2 lines)
-	titleLines := 0
-	if sl.plan.Title != "" {
-		titleLines = 2
-	}
-	itemLines := height - titleLines
+	// Calculate available lines for items
+	itemLines := height
 	if itemLines < 1 {
 		itemLines = 1
 	}
@@ -278,12 +274,6 @@ func (sl *StepList) Render(width, height int, styles Styles) string {
 	}
 
 	var sb strings.Builder
-
-	// Plan title
-	if sl.plan.Title != "" {
-		title := styles.Title.Render(truncate(sl.plan.Title, width-4))
-		sb.WriteString(title + "\n\n")
-	}
 
 	// Only render items in the visible window
 	end := sl.scrollOffset + itemLines

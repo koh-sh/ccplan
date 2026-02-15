@@ -355,8 +355,25 @@ func (a *App) refreshDetail() {
 	}
 }
 
+func (a *App) renderTitleBar() string {
+	if a.plan.Title == "" || a.width == 0 {
+		return ""
+	}
+	return a.styles.InactiveBorder.
+		Width(a.width - 2).
+		Render(a.styles.Title.Render(a.plan.Title))
+}
+
+func (a *App) titleBarHeight() int {
+	tb := a.renderTitleBar()
+	if tb == "" {
+		return 0
+	}
+	return lipgloss.Height(tb)
+}
+
 func (a *App) contentHeight() int {
-	h := a.height - 3
+	h := a.height - a.titleBarHeight() - 3
 	if h < 1 {
 		h = 1
 	}
@@ -420,14 +437,22 @@ func (a *App) View() string {
 		Height(ch).
 		Render(leftContent)
 
+	// Title bar (full width, above panes)
+	titleBar := a.renderTitleBar()
+
 	if singlePane {
+		var pane string
 		if a.focus == FocusRight {
 			rightContent := clipLines(a.renderRightContent(rw, ch), ch)
 			rightBorder := a.styles.ActiveBorder
-			rightPane := rightBorder.Width(rw).Height(ch).Render(rightContent)
-			return rightPane + "\n" + a.renderStatusBar()
+			pane = rightBorder.Width(rw).Height(ch).Render(rightContent)
+		} else {
+			pane = leftPane
 		}
-		return leftPane + "\n" + a.renderStatusBar()
+		if titleBar != "" {
+			return titleBar + "\n" + pane + "\n" + a.renderStatusBar()
+		}
+		return pane + "\n" + a.renderStatusBar()
 	}
 
 	// Right pane: clip content BEFORE applying border
@@ -443,6 +468,9 @@ func (a *App) View() string {
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 
+	if titleBar != "" {
+		return titleBar + "\n" + content + "\n" + a.renderStatusBar()
+	}
 	return content + "\n" + a.renderStatusBar()
 }
 
