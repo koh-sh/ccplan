@@ -23,15 +23,15 @@ type StepList struct {
 	items        []StepListItem
 	cursor       int
 	scrollOffset int
-	comments     map[string]*plan.ReviewComment // stepID -> comment
-	viewed       map[string]bool                // stepID -> viewed flag
+	comments     map[string][]*plan.ReviewComment // stepID -> comments
+	viewed       map[string]bool                  // stepID -> viewed flag
 	plan         *plan.Plan
 }
 
 // NewStepList creates a new StepList from a parsed plan.
 func NewStepList(p *plan.Plan) *StepList {
 	sl := &StepList{
-		comments: make(map[string]*plan.ReviewComment),
+		comments: make(map[string][]*plan.ReviewComment),
 		viewed:   make(map[string]bool),
 		plan:     p,
 	}
@@ -205,12 +205,36 @@ func (sl *StepList) IsOverviewSelected() bool {
 	return sl.items[sl.cursor].IsOverview
 }
 
-// SetComment sets a comment for a step.
-func (sl *StepList) SetComment(stepID string, comment *plan.ReviewComment) {
+// AddComment appends a comment for a step.
+func (sl *StepList) AddComment(stepID string, comment *plan.ReviewComment) {
 	if comment == nil || comment.Body == "" {
+		return
+	}
+	sl.comments[stepID] = append(sl.comments[stepID], comment)
+}
+
+// UpdateComment replaces a comment at the given index for a step.
+func (sl *StepList) UpdateComment(stepID string, index int, comment *plan.ReviewComment) {
+	comments := sl.comments[stepID]
+	if index < 0 || index >= len(comments) {
+		return
+	}
+	if comment == nil || comment.Body == "" {
+		sl.DeleteComment(stepID, index)
+		return
+	}
+	sl.comments[stepID][index] = comment
+}
+
+// DeleteComment removes a comment at the given index for a step.
+func (sl *StepList) DeleteComment(stepID string, index int) {
+	comments := sl.comments[stepID]
+	if index < 0 || index >= len(comments) {
+		return
+	}
+	sl.comments[stepID] = append(comments[:index], comments[index+1:]...)
+	if len(sl.comments[stepID]) == 0 {
 		delete(sl.comments, stepID)
-	} else {
-		sl.comments[stepID] = comment
 	}
 }
 
@@ -224,14 +248,19 @@ func (sl *StepList) IsViewed(stepID string) bool {
 	return sl.viewed[stepID]
 }
 
-// GetComment returns the comment for a step, or nil if none.
-func (sl *StepList) GetComment(stepID string) *plan.ReviewComment {
+// GetComments returns all comments for a step.
+func (sl *StepList) GetComments(stepID string) []*plan.ReviewComment {
 	return sl.comments[stepID]
 }
 
 // HasComments returns true if there are any comments.
 func (sl *StepList) HasComments() bool {
-	return len(sl.comments) > 0
+	for _, comments := range sl.comments {
+		if len(comments) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // BuildReviewResult creates a ReviewResult from all comments.
@@ -241,7 +270,7 @@ func (sl *StepList) BuildReviewResult() *plan.ReviewResult {
 	// Walk steps in order to maintain consistent ordering
 	allSteps := sl.plan.AllSteps()
 	for _, s := range allSteps {
-		if c, ok := sl.comments[s.ID]; ok {
+		for _, c := range sl.comments[s.ID] {
 			result.Comments = append(result.Comments, *c)
 		}
 	}
@@ -330,12 +359,14 @@ func (sl *StepList) Render(width, height int, styles Styles) string {
 
 // renderBadge renders the badge for a step (comment indicator, viewed mark).
 func (sl *StepList) renderBadge(stepID string, styles Styles) string {
-	hasComment := sl.comments[stepID] != nil
+	commentCount := len(sl.comments[stepID])
 	isViewed := sl.viewed[stepID]
 
 	var badge string
-	if hasComment {
+	if commentCount == 1 {
 		badge += styles.StepBadge.Render(" [*]")
+	} else if commentCount > 1 {
+		badge += styles.StepBadge.Render(fmt.Sprintf(" [*%d]", commentCount))
 	}
 	if isViewed {
 		badge += styles.ViewedBadge.Render(" [✓]")

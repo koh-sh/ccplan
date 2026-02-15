@@ -74,7 +74,7 @@ func (d *DetailPane) SetSize(width, height int) {
 }
 
 // ShowStep renders and displays a step's content.
-func (d *DetailPane) ShowStep(step *plan.Step, comment *plan.ReviewComment) {
+func (d *DetailPane) ShowStep(step *plan.Step, comments []*plan.ReviewComment) {
 	var content strings.Builder
 
 	content.WriteString(fmt.Sprintf("## %s: %s\n\n", step.ID, step.Title))
@@ -83,9 +83,13 @@ func (d *DetailPane) ShowStep(step *plan.Step, comment *plan.ReviewComment) {
 		content.WriteString(step.Body + "\n")
 	}
 
-	if comment != nil {
+	for i, comment := range comments {
 		content.WriteString("\n---\n\n")
-		content.WriteString(fmt.Sprintf("**Review Comment** [%s]\n\n", comment.Action))
+		if len(comments) == 1 {
+			content.WriteString(fmt.Sprintf("**Review Comment** [%s]\n\n", comment.Action))
+		} else {
+			content.WriteString(fmt.Sprintf("**Review Comment #%d** [%s]\n\n", i+1, comment.Action))
+		}
 		if comment.Body != "" {
 			content.WriteString(comment.Body + "\n")
 		}
