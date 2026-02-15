@@ -1,0 +1,2 @@
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Plan this feature"}]},"sessionId":"test-session","timestamp":"2025-01-01T00:00:00Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll create a plan."},{"type":"tool_use","id":"toolu_001","name":"Write","input":{"file_path":"/tmp/test-plans/jaunty-petting-nebula.md","content":"# Plan: Feature Implementation\n\n## Step 1\nDo something."}}]},"sessionId":"test-session","timestamp":"2025-01-01T00:00:01Z"}

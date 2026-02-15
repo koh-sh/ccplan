@@ -1,0 +1,3 @@
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_001","name":"Write","input":{"file_path":"/tmp/test-plans/plan-a.md","content":"# Plan A"}}]},"sessionId":"test-session","timestamp":"2025-01-01T00:00:01Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"revise"}]},"sessionId":"test-session","timestamp":"2025-01-01T00:00:02Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_002","name":"Write","input":{"file_path":"/tmp/test-plans/plan-b.md","content":"# Plan B"}}]},"sessionId":"test-session","timestamp":"2025-01-01T00:00:03Z"}

@@ -1,0 +1,335 @@
+package tui
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/koh-sh/ccplan/internal/plan"
+)
+
+// StepListItem is a flattened step for display in the step list.
+type StepListItem struct {
+	Step      *plan.Step
+	Depth     int
+	Expanded  bool
+	Visible   bool
+	IsOverview bool // true for the overview (preamble) entry
+}
+
+// StepList manages the left pane step tree.
+type StepList struct {
+	items        []StepListItem
+	cursor       int
+	scrollOffset int
+	comments     map[string]*plan.ReviewComment // stepID -> comment
+	plan         *plan.Plan
+}
+
+// NewStepList creates a new StepList from a parsed plan.
+func NewStepList(p *plan.Plan) *StepList {
+	sl := &StepList{
+		comments: make(map[string]*plan.ReviewComment),
+		plan:     p,
+	}
+
+	// Add overview entry if there's a preamble
+	if p.Preamble != "" {
+		sl.items = append(sl.items, StepListItem{
+			Visible:    true,
+			IsOverview: true,
+		})
+	}
+
+	// Flatten the step tree
+	var flatten func(steps []*plan.Step, depth int)
+	flatten = func(steps []*plan.Step, depth int) {
+		for _, s := range steps {
+			sl.items = append(sl.items, StepListItem{
+				Step:     s,
+				Depth:    depth,
+				Expanded: true,
+				Visible:  true,
+			})
+			flatten(s.Children, depth+1)
+		}
+	}
+	flatten(p.Steps, 0)
+
+	return sl
+}
+
+// CursorUp moves the cursor up to the previous visible item.
+func (sl *StepList) CursorUp() {
+	for i := sl.cursor - 1; i >= 0; i-- {
+		if sl.items[i].Visible {
+			sl.cursor = i
+			return
+		}
+	}
+}
+
+// CursorDown moves the cursor down to the next visible item.
+func (sl *StepList) CursorDown() {
+	for i := sl.cursor + 1; i < len(sl.items); i++ {
+		if sl.items[i].Visible {
+			sl.cursor = i
+			return
+		}
+	}
+}
+
+// ToggleExpand toggles the expand/collapse state of the current step.
+func (sl *StepList) ToggleExpand() {
+	if sl.cursor >= len(sl.items) {
+		return
+	}
+	item := &sl.items[sl.cursor]
+	if item.IsOverview || item.Step == nil || len(item.Step.Children) == 0 {
+		return
+	}
+	item.Expanded = !item.Expanded
+	sl.updateVisibility()
+}
+
+// Expand expands the current step.
+func (sl *StepList) Expand() {
+	if sl.cursor >= len(sl.items) {
+		return
+	}
+	item := &sl.items[sl.cursor]
+	if item.IsOverview || item.Step == nil || len(item.Step.Children) == 0 {
+		return
+	}
+	if !item.Expanded {
+		item.Expanded = true
+		sl.updateVisibility()
+	}
+}
+
+// Collapse collapses the current step.
+func (sl *StepList) Collapse() {
+	if sl.cursor >= len(sl.items) {
+		return
+	}
+	item := &sl.items[sl.cursor]
+	if item.IsOverview {
+		return
+	}
+
+	// If current item has children and is expanded, collapse it
+	if item.Step != nil && len(item.Step.Children) > 0 && item.Expanded {
+		item.Expanded = false
+		sl.updateVisibility()
+		return
+	}
+
+	// Otherwise, move to parent
+	if item.Step != nil && item.Step.Parent != nil {
+		for i, it := range sl.items {
+			if it.Step == item.Step.Parent {
+				sl.cursor = i
+				return
+			}
+		}
+	}
+}
+
+// updateVisibility updates the Visible field for all items based on parent expansion state.
+func (sl *StepList) updateVisibility() {
+	collapsed := make(map[*plan.Step]bool)
+	for _, item := range sl.items {
+		if item.Step != nil && !item.Expanded {
+			collapsed[item.Step] = true
+		}
+	}
+
+	for i := range sl.items {
+		if sl.items[i].IsOverview {
+			sl.items[i].Visible = true
+			continue
+		}
+		if sl.items[i].Step == nil {
+			continue
+		}
+
+		visible := true
+		parent := sl.items[i].Step.Parent
+		for parent != nil {
+			if collapsed[parent] {
+				visible = false
+				break
+			}
+			parent = parent.Parent
+		}
+		sl.items[i].Visible = visible
+	}
+}
+
+// Selected returns the currently selected step (or nil for overview).
+func (sl *StepList) Selected() *plan.Step {
+	if sl.cursor >= len(sl.items) {
+		return nil
+	}
+	return sl.items[sl.cursor].Step
+}
+
+// IsOverviewSelected returns true if the overview entry is selected.
+func (sl *StepList) IsOverviewSelected() bool {
+	if sl.cursor >= len(sl.items) {
+		return false
+	}
+	return sl.items[sl.cursor].IsOverview
+}
+
+// SetComment sets a comment for a step.
+func (sl *StepList) SetComment(stepID string, comment *plan.ReviewComment) {
+	if comment == nil || (comment.Body == "" && comment.Action == plan.ActionModify) {
+		delete(sl.comments, stepID)
+	} else {
+		sl.comments[stepID] = comment
+	}
+}
+
+// GetComment returns the comment for a step, or nil if none.
+func (sl *StepList) GetComment(stepID string) *plan.ReviewComment {
+	return sl.comments[stepID]
+}
+
+// HasComments returns true if there are any comments.
+func (sl *StepList) HasComments() bool {
+	return len(sl.comments) > 0
+}
+
+// BuildReviewResult creates a ReviewResult from all comments.
+func (sl *StepList) BuildReviewResult() *plan.ReviewResult {
+	result := &plan.ReviewResult{}
+
+	// Walk steps in order to maintain consistent ordering
+	allSteps := sl.plan.AllSteps()
+	for _, s := range allSteps {
+		if c, ok := sl.comments[s.ID]; ok {
+			result.Comments = append(result.Comments, *c)
+		}
+	}
+
+	return result
+}
+
+// Render renders the step list for display within the given height.
+func (sl *StepList) Render(width, height int, styles Styles) string {
+	// Build list of visible item indices
+	var visibleIndices []int
+	for i, item := range sl.items {
+		if item.Visible {
+			visibleIndices = append(visibleIndices, i)
+		}
+	}
+
+	// Find cursor position in visible list
+	cursorPos := 0
+	for vi, idx := range visibleIndices {
+		if idx == sl.cursor {
+			cursorPos = vi
+			break
+		}
+	}
+
+	// Calculate available lines for items (title takes 2 lines)
+	titleLines := 0
+	if sl.plan.Title != "" {
+		titleLines = 2
+	}
+	itemLines := height - titleLines
+	if itemLines < 1 {
+		itemLines = 1
+	}
+
+	// Adjust scroll offset to keep cursor visible
+	if cursorPos < sl.scrollOffset {
+		sl.scrollOffset = cursorPos
+	}
+	if cursorPos >= sl.scrollOffset+itemLines {
+		sl.scrollOffset = cursorPos - itemLines + 1
+	}
+	if sl.scrollOffset < 0 {
+		sl.scrollOffset = 0
+	}
+
+	var sb strings.Builder
+
+	// Plan title
+	if sl.plan.Title != "" {
+		title := styles.Title.Render(truncate(sl.plan.Title, width-4))
+		sb.WriteString(title + "\n\n")
+	}
+
+	// Only render items in the visible window
+	end := sl.scrollOffset + itemLines
+	if end > len(visibleIndices) {
+		end = len(visibleIndices)
+	}
+
+	for vi := sl.scrollOffset; vi < end; vi++ {
+		i := visibleIndices[vi]
+		item := sl.items[i]
+
+		var line string
+		if item.IsOverview {
+			line = "  Overview"
+		} else if item.Step != nil {
+			indent := strings.Repeat("  ", item.Depth)
+			prefix := " "
+			if len(item.Step.Children) > 0 {
+				if item.Expanded {
+					prefix = "▼"
+				} else {
+					prefix = "▶"
+				}
+			}
+
+			badge := sl.renderBadge(item.Step.ID, styles)
+			stepText := fmt.Sprintf("%s%s %s %s", indent, prefix, item.Step.ID, item.Step.Title)
+			line = truncate(stepText, width-4-len(badge)) + badge
+		}
+
+		if i == sl.cursor {
+			line = styles.SelectedStep.Render("> " + line)
+		} else {
+			line = styles.NormalStep.Render("  " + line)
+		}
+
+		sb.WriteString(line + "\n")
+	}
+
+	return sb.String()
+}
+
+// renderBadge renders the badge for a step (comment count, delete mark, approve mark).
+func (sl *StepList) renderBadge(stepID string, styles Styles) string {
+	c := sl.comments[stepID]
+	if c == nil {
+		return ""
+	}
+	switch c.Action {
+	case plan.ActionDelete:
+		return styles.DeleteBadge.Render(" [del]")
+	case plan.ActionApprove:
+		return styles.ApproveBadge.Render(" [ok]")
+	default:
+		return styles.StepBadge.Render(" [*]")
+	}
+}
+
+// truncate truncates a string to max length with ellipsis.
+func truncate(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if len(s) <= max {
+		return s
+	}
+	if max <= 3 {
+		return s[:max]
+	}
+	return s[:max-3] + "..."
+}

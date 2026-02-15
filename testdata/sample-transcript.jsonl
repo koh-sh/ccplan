@@ -1,0 +1,2 @@
+{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Plan this feature"}]},"sessionId":"test-session","timestamp":"2025-01-01T00:00:00Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I'll create a plan."},{"type":"tool_use","id":"toolu_001","name":"Write","input":{"file_path":"/Users/koh/github/ccplan/testdata/plans/sample-plan.md","content":"# Plan: Sample Feature\n\n## Step 1: Setup\n..."}}]},"sessionId":"test-session","timestamp":"2025-01-01T00:00:01Z"}
