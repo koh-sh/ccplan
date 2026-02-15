@@ -6,7 +6,8 @@ import (
 )
 
 // FormatReview formats a ReviewResult as a Markdown string.
-// Format: ## {StepID}: {StepTitle} [{ActionType}]
+// Comments on the same step are grouped under a single heading.
+// Format: ## {StepID}: {StepTitle}\n[{ActionType}] {Body}
 func FormatReview(result *ReviewResult, p *Plan, filePath string) string {
 	if len(result.Comments) == 0 {
 		return ""
@@ -17,20 +18,38 @@ func FormatReview(result *ReviewResult, p *Plan, filePath string) string {
 		target = "the file"
 	}
 
+	// Group comments by StepID, preserving first-seen order.
+	type group struct {
+		title    string
+		comments []ReviewComment
+	}
+	var order []string
+	groups := make(map[string]*group)
+
+	for _, c := range result.Comments {
+		g, ok := groups[c.StepID]
+		if !ok {
+			step := p.FindStep(c.StepID)
+			title := c.StepID
+			if step != nil {
+				title = fmt.Sprintf("%s: %s", c.StepID, step.Title)
+			}
+			g = &group{title: title}
+			groups[c.StepID] = g
+			order = append(order, c.StepID)
+		}
+		g.comments = append(g.comments, c)
+	}
+
 	var sb strings.Builder
 	sb.WriteString("# Plan Review\n\n")
 	sb.WriteString(fmt.Sprintf("Please review and address the following comments on: %s\n", target))
 
-	for _, c := range result.Comments {
-		step := p.FindStep(c.StepID)
-		title := c.StepID
-		if step != nil {
-			title = fmt.Sprintf("%s: %s", c.StepID, step.Title)
-		}
-
-		sb.WriteString(fmt.Sprintf("\n## %s [%s]\n", title, c.Action))
-		if c.Body != "" {
-			sb.WriteString(c.Body + "\n")
+	for _, id := range order {
+		g := groups[id]
+		sb.WriteString(fmt.Sprintf("\n## %s\n", g.title))
+		for _, c := range g.comments {
+			sb.WriteString(fmt.Sprintf("[%s] %s\n", c.Action, c.Body))
 		}
 	}
 
