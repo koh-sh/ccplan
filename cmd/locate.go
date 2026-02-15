@@ -19,9 +19,6 @@ func (l *LocateCmd) Run() error {
 	if l.Stdin {
 		input, err := locate.ParseHookInput(os.Stdin)
 		if err != nil {
-			if l.Quiet {
-				os.Exit(1)
-			}
 			return fmt.Errorf("parsing stdin: %w", err)
 		}
 		opts.TranscriptPath = input.TranscriptPath
@@ -31,32 +28,21 @@ func (l *LocateCmd) Run() error {
 	}
 
 	if opts.TranscriptPath == "" {
-		if l.Quiet {
-			os.Exit(1)
-		}
 		return fmt.Errorf("--transcript or --stdin is required")
 	}
 
 	paths, err := locate.LocatePlanFile(opts)
 	if err != nil {
-		if l.Quiet {
-			os.Exit(1)
-		}
 		return fmt.Errorf("locating plan file: %w", err)
 	}
 
 	if len(paths) == 0 {
-		if l.Quiet {
-			os.Exit(1)
-		}
 		plansDir := locate.ResolvePlansDir(opts.CWD)
 		return fmt.Errorf("no plan file found (plansDirectory: %s)", plansDir)
 	}
 
-	if !l.Quiet {
-		for _, p := range paths {
-			fmt.Println(p)
-		}
+	for _, p := range paths {
+		fmt.Println(p)
 	}
 
 	return nil

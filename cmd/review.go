@@ -27,7 +27,6 @@ func (r *ReviewCmd) Run() error {
 	// Create and run TUI
 	app := tui.NewApp(p, tui.AppOptions{
 		Theme:    r.Theme,
-		NoColor:  r.NoColor,
 		FilePath: r.PlanFile,
 	})
 	prog := tea.NewProgram(app, tea.WithAltScreen())
@@ -38,16 +37,9 @@ func (r *ReviewCmd) Run() error {
 
 	result := finalModel.(*tui.App).Result()
 
-	// Write status file if requested
-	if r.StatusPath != "" {
-		if err := os.WriteFile(r.StatusPath, []byte(string(result.Status)), 0o644); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to write status file: %v\n", err)
-		}
-	}
-
 	// Output review if submitted
 	if result.Status == plan.StatusSubmitted && result.Review != nil {
-		output := plan.FormatReview(result.Review, p)
+		output := plan.FormatReview(result.Review, p, r.PlanFile)
 		if output == "" {
 			return nil
 		}

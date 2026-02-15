@@ -14,7 +14,6 @@ import (
 type RunConfig struct {
 	Spawner pane.PaneSpawner
 	Theme   string
-	NoColor bool
 }
 
 // Run executes the hook orchestration flow.
@@ -45,7 +44,7 @@ func Run(input *Input, cfg RunConfig) (int, error) {
 		return 0, nil
 	}
 
-	// Prepare temp files for IPC with review subprocess
+	// Prepare temp file for IPC with review subprocess
 	reviewFile, err := os.CreateTemp("", "ccplan-review-*.md")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ccplan: failed to create temp review file: %v\n", err)
@@ -54,15 +53,6 @@ func Run(input *Input, cfg RunConfig) (int, error) {
 	reviewPath := reviewFile.Name()
 	reviewFile.Close()
 	defer os.Remove(reviewPath)
-
-	statusFile, err := os.CreateTemp("", "ccplan-status-*")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ccplan: failed to create temp status file: %v\n", err)
-		return 0, nil
-	}
-	statusPath := statusFile.Name()
-	statusFile.Close()
-	defer os.Remove(statusPath)
 
 	// Resolve ccplan binary path
 	executable, err := os.Executable()
@@ -75,13 +65,9 @@ func Run(input *Input, cfg RunConfig) (int, error) {
 		"review",
 		"--output", "file",
 		"--output-path", reviewPath,
-		"--status-path", statusPath,
 		"--theme", cfg.Theme,
+		planFile,
 	}
-	if cfg.NoColor {
-		args = append(args, "--no-color")
-	}
-	args = append(args, planFile)
 
 	// Spawn review in pane
 	spawner := cfg.Spawner
@@ -98,23 +84,14 @@ func Run(input *Input, cfg RunConfig) (int, error) {
 		}
 	}
 
-	// Read results
-	statusBytes, err := os.ReadFile(statusPath)
+	// Read review result — non-empty means submitted
+	reviewBytes, err := os.ReadFile(reviewPath)
 	if err != nil {
 		return 0, nil
 	}
-	status := string(statusBytes)
-
-	if status == "submitted" {
-		reviewBytes, err := os.ReadFile(reviewPath)
-		if err != nil {
-			return 0, nil
-		}
-		review := string(reviewBytes)
-		if review != "" {
-			fmt.Fprint(os.Stderr, review)
-			return 2, nil
-		}
+	if review := string(reviewBytes); review != "" {
+		fmt.Fprint(os.Stderr, review)
+		return 2, nil
 	}
 
 	return 0, nil

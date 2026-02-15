@@ -29,11 +29,7 @@ type Styles struct {
 }
 
 // stylesForTheme returns styles for the given theme.
-// If noColor is true, all color styling is disabled.
-func stylesForTheme(theme string, noColor bool) Styles {
-	if noColor {
-		return plainStyles()
-	}
+func stylesForTheme(theme string) Styles {
 	if theme == "light" {
 		return lightStyles()
 	}
@@ -113,30 +109,6 @@ func lightStyles() Styles {
 			BorderForeground(lipgloss.Color("33")),
 		HelpStyle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("245")),
-	}
-}
-
-// plainStyles returns styles with no colors (for --no-color).
-func plainStyles() Styles {
-	return Styles{
-		LeftPane: lipgloss.NewStyle().
-			Padding(0, 1),
-		RightPane: lipgloss.NewStyle().
-			Padding(0, 1),
-		ActiveBorder: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()),
-		InactiveBorder: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()),
-		Title:        lipgloss.NewStyle().Bold(true),
-		SelectedStep: lipgloss.NewStyle().Bold(true),
-		NormalStep:   lipgloss.NewStyle(),
-		StepBadge:    lipgloss.NewStyle(),
-		ViewedBadge: lipgloss.NewStyle(),
-		StatusBar:    lipgloss.NewStyle(),
-		StatusKey:    lipgloss.NewStyle().Bold(true),
-		CommentBorder: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()),
-		HelpStyle: lipgloss.NewStyle(),
 	}
 }
 

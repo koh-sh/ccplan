@@ -14,11 +14,12 @@ import (
 type AppMode int
 
 const (
-	ModeNormal  AppMode = iota // Step list navigation
-	ModeComment                // Comment input
-	ModeConfirm                // Confirmation dialog
-	ModeHelp                   // Help overlay
-	ModeSearch                 // Step search
+	ModeNormal      AppMode = iota // Step list navigation
+	ModeComment                    // Comment input
+	ModeCommentList                // Comment list management
+	ModeConfirm                    // Confirmation dialog
+	ModeHelp                       // Help overlay
+	ModeSearch                     // Step search
 )
 
 // Focus represents which pane has focus.
@@ -37,13 +38,14 @@ type AppResult struct {
 
 // App is the main Bubble Tea model for the TUI.
 type App struct {
-	plan     *plan.Plan
-	stepList *StepList
-	detail   *DetailPane
-	comment  *CommentEditor
-	search   *SearchBar
-	keymap   KeyMap
-	styles   Styles
+	plan        *plan.Plan
+	stepList    *StepList
+	detail      *DetailPane
+	comment     *CommentEditor
+	commentList *CommentList
+	search      *SearchBar
+	keymap      KeyMap
+	styles      Styles
 
 	mode   AppMode
 	focus  Focus
@@ -52,27 +54,29 @@ type App struct {
 	ready  bool
 	opts   AppOptions
 
-	result   AppResult
-	pendingG bool // gg chord: true when first 'g' was pressed
+	result          AppResult
+	pendingG        bool // gg chord: true when first 'g' was pressed
+	editCommentIdx  int  // index of comment being edited in comment list mode (-1 = new)
 }
 
 // AppOptions configures the TUI appearance.
 type AppOptions struct {
 	Theme    string // "dark" or "light"
-	NoColor  bool
 	FilePath string // plan file path (displayed in title bar)
 }
 
 // NewApp creates a new App model.
 func NewApp(p *plan.Plan, opts AppOptions) *App {
 	return &App{
-		plan:     p,
-		stepList: NewStepList(p),
-		comment:  NewCommentEditor(),
-		search:   NewSearchBar(),
-		keymap:   DefaultKeyMap(),
-		styles:   stylesForTheme(opts.Theme, opts.NoColor),
-		opts:     opts,
+		plan:           p,
+		stepList:       NewStepList(p),
+		comment:        NewCommentEditor(),
+		commentList:    NewCommentList(),
+		search:         NewSearchBar(),
+		keymap:         DefaultKeyMap(),
+		styles:         stylesForTheme(opts.Theme),
+		opts:           opts,
+		editCommentIdx: -1,
 		result: AppResult{
 			Status: plan.StatusCancelled,
 		},
@@ -123,6 +127,8 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.handleNormalMode(msg)
 	case ModeComment:
 		return a.handleCommentMode(msg)
+	case ModeCommentList:
+		return a.handleCommentListMode(msg)
 	case ModeConfirm:
 		return a.handleConfirmMode(msg)
 	case ModeHelp:
@@ -216,10 +222,19 @@ func (a *App) handleLeftPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, a.keymap.Comment):
 		if step := a.stepList.Selected(); step != nil {
-			existing := a.stepList.GetComment(step.ID)
-			a.comment.Open(step.ID, existing)
+			a.editCommentIdx = -1
+			a.comment.Open(step.ID, nil)
 			a.mode = ModeComment
 			return a, a.comment.textarea.Focus()
+		}
+
+	case key.Matches(msg, a.keymap.CommentList):
+		if step := a.stepList.Selected(); step != nil {
+			comments := a.stepList.GetComments(step.ID)
+			if len(comments) > 0 {
+				a.commentList.Open(step.ID, comments)
+				a.mode = ModeCommentList
+			}
 		}
 
 	case key.Matches(msg, a.keymap.Viewed):
@@ -250,15 +265,37 @@ func (a *App) handleCommentMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyCtrlS:
 		result := a.comment.Result()
-		a.stepList.SetComment(a.comment.StepID(), result)
+		if result != nil {
+			if a.editCommentIdx >= 0 {
+				a.stepList.UpdateComment(a.comment.StepID(), a.editCommentIdx, result)
+			} else {
+				a.stepList.AddComment(a.comment.StepID(), result)
+			}
+		}
 		a.comment.Close()
-		a.mode = ModeNormal
+		if a.editCommentIdx >= 0 {
+			// Return to comment list after editing
+			comments := a.stepList.GetComments(a.comment.StepID())
+			a.commentList.Open(a.comment.StepID(), comments)
+			a.mode = ModeCommentList
+		} else {
+			a.mode = ModeNormal
+		}
+		a.editCommentIdx = -1
 		a.refreshDetail()
 		return a, nil
 
 	case tea.KeyEsc:
 		a.comment.Close()
-		a.mode = ModeNormal
+		if a.editCommentIdx >= 0 {
+			// Return to comment list after cancel
+			comments := a.stepList.GetComments(a.comment.StepID())
+			a.commentList.Open(a.comment.StepID(), comments)
+			a.mode = ModeCommentList
+		} else {
+			a.mode = ModeNormal
+		}
+		a.editCommentIdx = -1
 		return a, nil
 
 	case tea.KeyTab:
@@ -268,6 +305,55 @@ func (a *App) handleCommentMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	cmd := a.comment.Update(msg)
 	return a, cmd
+}
+
+func (a *App) handleCommentListMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEsc:
+		a.commentList.Close()
+		a.mode = ModeNormal
+		a.refreshDetail()
+		return a, nil
+	}
+
+	switch {
+	case key.Matches(msg, a.keymap.Up):
+		a.commentList.CursorUp()
+		return a, nil
+	case key.Matches(msg, a.keymap.Down):
+		a.commentList.CursorDown()
+		return a, nil
+	}
+
+	switch msg.String() {
+	case "e":
+		// Edit selected comment
+		stepID := a.commentList.StepID()
+		idx := a.commentList.Cursor()
+		comments := a.stepList.GetComments(stepID)
+		if idx >= 0 && idx < len(comments) {
+			a.editCommentIdx = idx
+			a.comment.Open(stepID, comments[idx])
+			a.mode = ModeComment
+			return a, a.comment.textarea.Focus()
+		}
+	case "d":
+		// Delete selected comment
+		stepID := a.commentList.StepID()
+		idx := a.commentList.Cursor()
+		a.stepList.DeleteComment(stepID, idx)
+		comments := a.stepList.GetComments(stepID)
+		if len(comments) == 0 {
+			a.commentList.Close()
+			a.mode = ModeNormal
+		} else {
+			a.commentList.Open(stepID, comments)
+		}
+		a.refreshDetail()
+		return a, nil
+	}
+
+	return a, nil
 }
 
 func (a *App) handleConfirmMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -367,8 +453,8 @@ func (a *App) refreshDetail() {
 	}
 
 	if step := a.stepList.Selected(); step != nil {
-		comment := a.stepList.GetComment(step.ID)
-		a.detail.ShowStep(step, comment)
+		comments := a.stepList.GetComments(step.ID)
+		a.detail.ShowStep(step, comments)
 	}
 }
 
@@ -507,7 +593,8 @@ func (a *App) View() string {
 }
 
 func (a *App) renderRightContent(width, height int) string {
-	if a.mode == ModeComment {
+	switch a.mode {
+	case ModeComment:
 		commentHeight := 7
 		detailHeight := height - commentHeight - 2
 		if detailHeight < 1 {
@@ -521,6 +608,9 @@ func (a *App) renderRightContent(width, height int) string {
 		commentView := a.comment.View()
 
 		return detailView + "\n" + separator + "\n" + commentView
+
+	case ModeCommentList:
+		return a.commentList.Render(width, height, a.styles)
 	}
 
 	return a.detail.View()
@@ -536,6 +626,15 @@ func (a *App) renderStatusBar() string {
 		)
 	}
 
+	if a.mode == ModeCommentList {
+		return a.styles.StatusBar.Render(
+			a.styles.StatusKey.Render("j/k") + " navigate  " +
+				a.styles.StatusKey.Render("e") + " edit  " +
+				a.styles.StatusKey.Render("d") + " delete  " +
+				a.styles.StatusKey.Render("esc") + " back",
+		)
+	}
+
 	if a.mode == ModeSearch {
 		return a.search.View()
 	}
@@ -545,6 +644,7 @@ func (a *App) renderStatusBar() string {
 			a.styles.StatusKey.Render("gg/G") + " top/bottom  " +
 			a.styles.StatusKey.Render("enter") + " toggle  " +
 			a.styles.StatusKey.Render("c") + " comment  " +
+			a.styles.StatusKey.Render("C") + " comments  " +
 			a.styles.StatusKey.Render("v") + " viewed  " +
 			a.styles.StatusKey.Render("/") + " search  " +
 			a.styles.StatusKey.Render("s") + " submit  " +
@@ -593,7 +693,8 @@ func (a *App) renderHelp() string {
     Tab             Switch between left/right pane
 
   Review:
-    c               Add/edit comment on selected step
+    c               Add comment on selected step
+    C               Manage comments (edit/delete)
     v               Toggle viewed mark
     /               Search steps
     s               Submit review

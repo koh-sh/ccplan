@@ -21,7 +21,6 @@ func (h *HookCmd) Run() error {
 	exitCode, err := hook.Run(input, hook.RunConfig{
 		Spawner: spawner,
 		Theme:   h.Theme,
-		NoColor: h.NoColor,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ccplan hook: %v\n", err)
