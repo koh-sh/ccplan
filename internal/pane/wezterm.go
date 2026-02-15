@@ -73,14 +73,43 @@ func (w *WezTermSpawner) SpawnAndWait(ctx context.Context, cmd string, args []st
 	}
 }
 
+type paneSize struct {
+	Rows        int `json:"rows"`
+	Cols        int `json:"cols"`
+	PixelWidth  int `json:"pixel_width"`
+	PixelHeight int `json:"pixel_height"`
+}
+
 type weztermPane struct {
 	PaneID json.Number `json:"pane_id"`
-	Size   struct {
-		Rows        int `json:"rows"`
-		Cols        int `json:"cols"`
-		PixelWidth  int `json:"pixel_width"`
-		PixelHeight int `json:"pixel_height"`
-	} `json:"size"`
+	Size   paneSize    `json:"size"`
+}
+
+// listPanes returns all WezTerm panes by calling wezterm cli list.
+func (w *WezTermSpawner) listPanes() ([]weztermPane, error) {
+	out, err := w.run("wezterm", "cli", "list", "--format", "json")
+	if err != nil {
+		return nil, fmt.Errorf("wezterm cli list: %w", err)
+	}
+	var panes []weztermPane
+	if err := json.Unmarshal(out, &panes); err != nil {
+		return nil, fmt.Errorf("parse json: %w", err)
+	}
+	return panes, nil
+}
+
+// findPane returns the pane with the given ID, or nil if not found.
+func (w *WezTermSpawner) findPane(paneID string) (*weztermPane, error) {
+	panes, err := w.listPanes()
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range panes {
+		if p.PaneID.String() == paneID {
+			return &p, nil
+		}
+	}
+	return nil, nil
 }
 
 // splitDirection returns the split direction and percent based on current pane dimensions.
@@ -105,57 +134,23 @@ func (w *WezTermSpawner) splitDirection() (string, string) {
 	return "--bottom", "80"
 }
 
-type paneSize struct {
-	Rows        int
-	Cols        int
-	PixelWidth  int
-	PixelHeight int
-}
-
 // currentPaneSize returns the dimensions of the current pane using WEZTERM_PANE env var.
 func (w *WezTermSpawner) currentPaneSize() (*paneSize, error) {
 	currentPaneID := os.Getenv("WEZTERM_PANE")
 	if currentPaneID == "" {
 		return nil, fmt.Errorf("WEZTERM_PANE not set")
 	}
-
-	out, err := w.run("wezterm", "cli", "list", "--format", "json")
+	p, err := w.findPane(currentPaneID)
 	if err != nil {
-		return nil, fmt.Errorf("wezterm cli list: %w", err)
+		return nil, err
 	}
-
-	var panes []weztermPane
-	if err := json.Unmarshal(out, &panes); err != nil {
-		return nil, fmt.Errorf("parse json: %w", err)
+	if p == nil {
+		return nil, fmt.Errorf("pane %s not found", currentPaneID)
 	}
-
-	for _, p := range panes {
-		if p.PaneID.String() == currentPaneID {
-			return &paneSize{
-				Rows:        p.Size.Rows,
-				Cols:        p.Size.Cols,
-				PixelWidth:  p.Size.PixelWidth,
-				PixelHeight: p.Size.PixelHeight,
-			}, nil
-		}
-	}
-
-	return nil, fmt.Errorf("pane %s not found", currentPaneID)
+	return &p.Size, nil
 }
 
 func (w *WezTermSpawner) paneExists(paneID string) bool {
-	out, err := w.run("wezterm", "cli", "list", "--format", "json")
-	if err != nil {
-		return false
-	}
-	var panes []weztermPane
-	if err := json.Unmarshal(out, &panes); err != nil {
-		return false
-	}
-	for _, p := range panes {
-		if p.PaneID.String() == paneID {
-			return true
-		}
-	}
-	return false
+	p, err := w.findPane(paneID)
+	return err == nil && p != nil
 }

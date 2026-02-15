@@ -35,7 +35,11 @@ func (r *ReviewCmd) Run() error {
 		return fmt.Errorf("running TUI: %w", err)
 	}
 
-	result := finalModel.(*tui.App).Result()
+	app, ok := finalModel.(*tui.App)
+	if !ok {
+		return fmt.Errorf("unexpected model type: %T", finalModel)
+	}
+	result := app.Result()
 
 	// Output review if submitted
 	if result.Status == plan.StatusSubmitted && result.Review != nil {
