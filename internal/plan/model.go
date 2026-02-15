@@ -77,7 +77,7 @@ var ActionLabels = []ActionType{
 }
 
 // DefaultAction is the default action type for new comments.
-const DefaultAction = ActionSuggestion
+const DefaultAction = ActionTodo
 
 // ReviewResult holds the entire review output.
 type ReviewResult struct {

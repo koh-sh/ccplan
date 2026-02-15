@@ -280,6 +280,10 @@ func (a *App) handleCommentMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.returnFromComment()
 		return a, nil
 
+	case msg.Type == tea.KeyShiftTab:
+		a.comment.CycleLabelReverse()
+		return a, nil
+
 	case msg.Type == tea.KeyTab:
 		a.comment.CycleLabel()
 		return a, nil
@@ -610,7 +614,7 @@ func (a *App) statusEntry(key, label string) string {
 func (a *App) renderStatusBar() string {
 	if a.mode == ModeComment {
 		return a.styles.StatusBar.Render(
-			a.statusEntry("tab", "label:") + " " +
+			a.statusEntry("tab/S-tab", "label:") + " " +
 				a.styles.Title.Render(string(a.comment.Label())) + "  " +
 				a.statusEntry("ctrl+s", "save") + "  " +
 				a.statusEntry("esc", "cancel"),
@@ -691,6 +695,8 @@ func (a *App) renderHelp() string {
     s               Submit review
 
   Comment Editor:
+    Tab             Cycle label (forward)
+    Shift+Tab       Cycle label (reverse)
     Ctrl+S          Save comment
     Esc             Cancel editing
 

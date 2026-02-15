@@ -46,8 +46,8 @@ func TestCommentEditorOpenNew(t *testing.T) {
 	ce := NewCommentEditor()
 	ce.Open("S1", nil)
 
-	if ce.Label() != plan.ActionSuggestion {
-		t.Errorf("default label = %s, want suggestion", ce.Label())
+	if ce.Label() != plan.ActionTodo {
+		t.Errorf("default label = %s, want todo", ce.Label())
 	}
 }
 
@@ -64,9 +64,30 @@ func TestCommentEditorCycleLabel(t *testing.T) {
 	if len(labels) != len(plan.ActionLabels) {
 		t.Errorf("cycled %d labels, want %d", len(labels), len(plan.ActionLabels))
 	}
-	// After full cycle, should be back to first
-	if ce.Label() != plan.ActionLabels[0] {
-		t.Errorf("after full cycle, label = %s, want %s", ce.Label(), plan.ActionLabels[0])
+	// After full cycle, should be back to default
+	if ce.Label() != plan.DefaultAction {
+		t.Errorf("after full cycle, label = %s, want %s", ce.Label(), plan.DefaultAction)
+	}
+}
+
+func TestCommentEditorCycleLabelReverse(t *testing.T) {
+	ce := NewCommentEditor()
+	ce.Open("S1", nil)
+
+	initial := ce.Label()
+	ce.CycleLabelReverse()
+	// Cycle forward should return to initial
+	ce.CycleLabel()
+	if ce.Label() != initial {
+		t.Errorf("after reverse+forward: label = %s, want %s", ce.Label(), initial)
+	}
+
+	// Full reverse cycle should return to start
+	for range len(plan.ActionLabels) {
+		ce.CycleLabelReverse()
+	}
+	if ce.Label() != initial {
+		t.Errorf("after full reverse cycle: label = %s, want %s", ce.Label(), initial)
 	}
 }
 
@@ -107,8 +128,8 @@ func TestCommentEditorResult(t *testing.T) {
 		if result.Body != "test comment" {
 			t.Errorf("body = %s, want 'test comment'", result.Body)
 		}
-		if result.Action != plan.ActionSuggestion {
-			t.Errorf("action = %s, want suggestion", result.Action)
+		if result.Action != plan.ActionTodo {
+			t.Errorf("action = %s, want todo", result.Action)
 		}
 	})
 

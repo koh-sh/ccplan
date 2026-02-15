@@ -38,7 +38,7 @@ func (c *CommentEditor) Open(stepID string, existing *plan.ReviewComment) {
 		c.labelIndex = c.labelIndexFor(existing.Action)
 		c.textarea.SetValue(existing.Body)
 	} else {
-		c.labelIndex = 0 // default: suggestion
+		c.labelIndex = c.labelIndexFor(plan.DefaultAction)
 		c.textarea.SetValue("")
 	}
 
@@ -79,6 +79,11 @@ func (c *CommentEditor) Label() plan.ActionType {
 // CycleLabel cycles to the next action label.
 func (c *CommentEditor) CycleLabel() {
 	c.labelIndex = (c.labelIndex + 1) % len(plan.ActionLabels)
+}
+
+// CycleLabelReverse cycles to the previous action label.
+func (c *CommentEditor) CycleLabelReverse() {
+	c.labelIndex = (c.labelIndex - 1 + len(plan.ActionLabels)) % len(plan.ActionLabels)
 }
 
 // Result returns the review comment from the editor content.
