@@ -1,6 +1,7 @@
 package pane
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -40,7 +41,7 @@ func (w *WezTermSpawner) Name() string {
 	return "wezterm"
 }
 
-func (w *WezTermSpawner) SpawnAndWait(cmd string, args []string) error {
+func (w *WezTermSpawner) SpawnAndWait(ctx context.Context, cmd string, args []string) error {
 	direction, percent := w.splitDirection()
 
 	fullCmd := append([]string{cmd}, args...)
@@ -60,6 +61,8 @@ func (w *WezTermSpawner) SpawnAndWait(cmd string, args []string) error {
 
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case <-timeout:
 			return fmt.Errorf("timeout waiting for pane %s to close", paneID)
 		case <-ticker.C:

@@ -1,6 +1,7 @@
 package pane
 
 import (
+	"context"
 	"testing"
 )
 
@@ -20,7 +21,7 @@ func TestDirectSpawnerName(t *testing.T) {
 
 func TestDirectSpawnerSpawnSuccess(t *testing.T) {
 	d := &DirectSpawner{}
-	err := d.SpawnAndWait("true", nil)
+	err := d.SpawnAndWait(context.Background(), "true", nil)
 	if err != nil {
 		t.Errorf("SpawnAndWait(true) error = %v", err)
 	}
@@ -28,7 +29,7 @@ func TestDirectSpawnerSpawnSuccess(t *testing.T) {
 
 func TestDirectSpawnerSpawnFailure(t *testing.T) {
 	d := &DirectSpawner{}
-	err := d.SpawnAndWait("nonexistent-command-that-does-not-exist", nil)
+	err := d.SpawnAndWait(context.Background(), "nonexistent-command-that-does-not-exist", nil)
 	if err == nil {
 		t.Error("SpawnAndWait with nonexistent command should return error")
 	}

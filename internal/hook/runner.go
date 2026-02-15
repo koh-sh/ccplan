@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -70,14 +71,15 @@ func Run(input *Input, cfg RunConfig) (int, error) {
 	}
 
 	// Spawn review in pane
+	ctx := context.Background()
 	spawner := cfg.Spawner
-	err = spawner.SpawnAndWait(executable, args)
+	err = spawner.SpawnAndWait(ctx, executable, args)
 	if err != nil {
 		// Fallback to direct if not already direct
 		if spawner.Name() != "direct" {
 			fmt.Fprintf(os.Stderr, "ccplan: %s spawn failed, falling back to direct: %v\n", spawner.Name(), err)
 			direct := &pane.DirectSpawner{}
-			err = direct.SpawnAndWait(executable, args)
+			err = direct.SpawnAndWait(ctx, executable, args)
 		}
 		if err != nil {
 			return 0, nil

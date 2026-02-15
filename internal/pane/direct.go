@@ -1,6 +1,7 @@
 package pane
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,8 +18,8 @@ func (d *DirectSpawner) Name() string {
 	return "direct"
 }
 
-func (d *DirectSpawner) SpawnAndWait(cmd string, args []string) error {
-	c := exec.Command(cmd, args...)
+func (d *DirectSpawner) SpawnAndWait(ctx context.Context, cmd string, args []string) error {
+	c := exec.CommandContext(ctx, cmd, args...)
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr

@@ -194,30 +194,42 @@ func TestReviewCmdRunNoTerminal(t *testing.T) {
 	}
 }
 
-func TestHookCmdRunExitParseError(t *testing.T) {
-	h := &HookCmd{Spawner: "auto", Theme: "dark"}
-	code := h.runExit(strings.NewReader("not valid json"))
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0 for parse error", code)
+func TestHookCmdRunExit(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		envSkip  bool
+		wantCode int
+	}{
+		{
+			name:     "parse error",
+			input:    "not valid json",
+			wantCode: 0,
+		},
+		{
+			name:     "non-plan mode",
+			input:    `{"session_id":"test","transcript_path":"/tmp/t.jsonl","cwd":"/tmp","hook_event_name":"PostToolUse","permission_mode":"default","tool_name":"Write","tool_input":{"file_path":"/tmp/file.go"}}`,
+			wantCode: 0,
+		},
+		{
+			name:     "skip env",
+			input:    `{"session_id":"test","transcript_path":"/tmp/t.jsonl","cwd":"/tmp","hook_event_name":"PostToolUse","permission_mode":"plan","tool_name":"Write","tool_input":{"file_path":"/tmp/file.go"}}`,
+			envSkip:  true,
+			wantCode: 0,
+		},
 	}
-}
 
-func TestHookCmdRunExitNonPlanMode(t *testing.T) {
-	h := &HookCmd{Spawner: "auto", Theme: "dark"}
-	input := `{"session_id":"test","transcript_path":"/tmp/t.jsonl","cwd":"/tmp","hook_event_name":"PostToolUse","permission_mode":"default","tool_name":"Write","tool_input":{"file_path":"/tmp/file.go"}}`
-	code := h.runExit(strings.NewReader(input))
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0 for non-plan mode", code)
-	}
-}
-
-func TestHookCmdRunExitSkipEnv(t *testing.T) {
-	t.Setenv("PLAN_REVIEW_SKIP", "1")
-	h := &HookCmd{Spawner: "auto", Theme: "dark"}
-	input := `{"session_id":"test","transcript_path":"/tmp/t.jsonl","cwd":"/tmp","hook_event_name":"PostToolUse","permission_mode":"plan","tool_name":"Write","tool_input":{"file_path":"/tmp/file.go"}}`
-	code := h.runExit(strings.NewReader(input))
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0 when PLAN_REVIEW_SKIP=1", code)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envSkip {
+				t.Setenv("PLAN_REVIEW_SKIP", "1")
+			}
+			h := &HookCmd{Spawner: "auto", Theme: "dark"}
+			code := h.runExit(strings.NewReader(tt.input))
+			if code != tt.wantCode {
+				t.Errorf("exit code = %d, want %d", code, tt.wantCode)
+			}
+		})
 	}
 }
 

@@ -1,6 +1,7 @@
 package pane
 
 import (
+	"context"
 	"fmt"
 	"testing"
 )
@@ -246,7 +247,7 @@ func TestSpawnAndWaitSuccess(t *testing.T) {
 	}
 	// Ensure WEZTERM_PANE is not set so splitDirection falls back without calling runner
 	t.Setenv("WEZTERM_PANE", "")
-	err := w.SpawnAndWait("ccplan", []string{"review", "plan.md"})
+	err := w.SpawnAndWait(context.Background(), "ccplan", []string{"review", "plan.md"})
 	if err != nil {
 		t.Fatalf("SpawnAndWait() error = %v", err)
 	}
@@ -261,7 +262,7 @@ func TestSpawnAndWaitSplitError(t *testing.T) {
 			},
 		},
 	}
-	err := w.SpawnAndWait("ccplan", []string{"review"})
+	err := w.SpawnAndWait(context.Background(), "ccplan", []string{"review"})
 	if err == nil {
 		t.Error("expected error on split-pane failure")
 	}

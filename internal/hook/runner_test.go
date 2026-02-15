@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -20,7 +21,7 @@ type mockSpawner struct {
 
 func (m *mockSpawner) Available() bool { return m.available }
 func (m *mockSpawner) Name() string    { return m.name }
-func (m *mockSpawner) SpawnAndWait(cmd string, args []string) error {
+func (m *mockSpawner) SpawnAndWait(_ context.Context, cmd string, args []string) error {
 	m.spawnCalled = true
 	if m.spawnFunc != nil {
 		return m.spawnFunc(cmd, args)
