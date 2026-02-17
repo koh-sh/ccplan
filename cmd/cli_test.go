@@ -128,6 +128,122 @@ func TestLocateCmdRunNoPlanFound(t *testing.T) {
 	}
 }
 
+func TestWriteReviewOutput(t *testing.T) {
+	t.Run("stdout", func(t *testing.T) {
+		old := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		err := writeReviewOutput("hello", "stdout", "")
+
+		w.Close()
+		os.Stdout = old
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var buf bytes.Buffer
+		if _, err := buf.ReadFrom(r); err != nil {
+			t.Fatal(err)
+		}
+		if buf.String() != "hello" {
+			t.Errorf("output = %q, want %q", buf.String(), "hello")
+		}
+	})
+
+	t.Run("file_write_success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		outFile := filepath.Join(tmpDir, "output.txt")
+		// Create the file first so WriteFile can succeed
+		if err := os.WriteFile(outFile, []byte(""), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		err := writeReviewOutput("review content", "file", outFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := os.ReadFile(outFile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != "review content" {
+			t.Errorf("file content = %q, want %q", string(got), "review content")
+		}
+	})
+
+	t.Run("file_missing_output_path", func(t *testing.T) {
+		err := writeReviewOutput("review", "file", "")
+		if err == nil {
+			t.Fatal("expected error for empty output path")
+		}
+		if !strings.Contains(err.Error(), "--output-path is required") {
+			t.Errorf("error = %q, want to contain '--output-path is required'", err.Error())
+		}
+	})
+
+	t.Run("file_deleted_falls_back", func(t *testing.T) {
+		// Simulate hook timeout scenario: file was created then deleted.
+		tmpDir := t.TempDir()
+		outFile := filepath.Join(tmpDir, "output.txt")
+		// File does not exist at this path (never created), simulating deletion.
+
+		oldErr := os.Stderr
+		r, w, _ := os.Pipe()
+		os.Stderr = w
+
+		err := writeReviewOutput("fallback content", "file", outFile)
+
+		w.Close()
+		os.Stderr = oldErr
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var buf bytes.Buffer
+		if _, err := buf.ReadFrom(r); err != nil {
+			t.Fatal(err)
+		}
+		stderr := buf.String()
+		if !strings.Contains(stderr, "was deleted") {
+			t.Errorf("stderr should mention file was deleted, got %q", stderr)
+		}
+		// File should NOT be created by the fallback path.
+		if _, err := os.Stat(outFile); err == nil {
+			t.Error("output file should not exist after fallback")
+		}
+	})
+
+	t.Run("file_write_error_returns_error", func(t *testing.T) {
+		// Create a read-only directory to cause a permission error
+		tmpDir := t.TempDir()
+		readOnlyDir := filepath.Join(tmpDir, "readonly")
+		if err := os.MkdirAll(readOnlyDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		outFile := filepath.Join(readOnlyDir, "output.txt")
+		// Create the file, then make directory read-only
+		if err := os.WriteFile(outFile, []byte(""), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(outFile, 0o000); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(outFile, 0o644) })
+
+		err := writeReviewOutput("review", "file", outFile)
+		if err == nil {
+			t.Fatal("expected error for permission denied")
+		}
+		if !strings.Contains(err.Error(), "writing output file") {
+			t.Errorf("error = %q, want to contain 'writing output file'", err.Error())
+		}
+	})
+}
+
 func TestReviewCmdRunFileNotFound(t *testing.T) {
 	r := &ReviewCmd{
 		PlanFile: "/nonexistent/path/plan.md",
