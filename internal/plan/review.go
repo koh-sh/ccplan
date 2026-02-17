@@ -43,13 +43,13 @@ func FormatReview(result *ReviewResult, p *Plan, filePath string) string {
 
 	var sb strings.Builder
 	sb.WriteString("# Plan Review\n\n")
-	sb.WriteString(fmt.Sprintf("Please review and address the following comments on: %s\n", target))
+	fmt.Fprintf(&sb, "Please review and address the following comments on: %s\n", target)
 
 	for _, id := range order {
 		g := groups[id]
-		sb.WriteString(fmt.Sprintf("\n## %s\n", g.title))
+		fmt.Fprintf(&sb, "\n## %s\n", g.title)
 		for _, c := range g.comments {
-			sb.WriteString(fmt.Sprintf("[%s] %s\n", c.Action, c.Body))
+			fmt.Fprintf(&sb, "[%s] %s\n", c.Action, c.Body)
 		}
 	}
 

@@ -79,7 +79,7 @@ func (d *DetailPane) SetSize(width, height int) {
 func (d *DetailPane) ShowStep(step *plan.Step, comments []*plan.ReviewComment) {
 	var content strings.Builder
 
-	content.WriteString(fmt.Sprintf("## %s: %s\n\n", step.ID, step.Title))
+	fmt.Fprintf(&content, "## %s: %s\n\n", step.ID, step.Title)
 
 	if step.Body != "" {
 		content.WriteString(step.Body + "\n")
@@ -88,9 +88,9 @@ func (d *DetailPane) ShowStep(step *plan.Step, comments []*plan.ReviewComment) {
 	for i, comment := range comments {
 		content.WriteString("\n---\n\n")
 		if len(comments) == 1 {
-			content.WriteString(fmt.Sprintf("**Review Comment** [%s]\n\n", comment.Action))
+			fmt.Fprintf(&content, "**Review Comment** [%s]\n\n", comment.Action)
 		} else {
-			content.WriteString(fmt.Sprintf("**Review Comment #%d** [%s]\n\n", i+1, comment.Action))
+			fmt.Fprintf(&content, "**Review Comment #%d** [%s]\n\n", i+1, comment.Action)
 		}
 		if comment.Body != "" {
 			content.WriteString(comment.Body + "\n")
@@ -105,7 +105,7 @@ func (d *DetailPane) ShowOverview(p *plan.Plan) {
 	var content strings.Builder
 
 	if p.Title != "" {
-		content.WriteString(fmt.Sprintf("# %s\n\n", p.Title))
+		fmt.Fprintf(&content, "# %s\n\n", p.Title)
 	}
 	if p.Preamble != "" {
 		content.WriteString(p.Preamble + "\n")
