@@ -46,8 +46,8 @@ func TestCommentEditorOpenNew(t *testing.T) {
 	ce := NewCommentEditor()
 	ce.Open("S1", nil)
 
-	if ce.Label() != plan.ActionTodo {
-		t.Errorf("default label = %s, want todo", ce.Label())
+	if ce.Label() != plan.ActionQuestion {
+		t.Errorf("default label = %s, want question", ce.Label())
 	}
 }
 
@@ -128,8 +128,8 @@ func TestCommentEditorResult(t *testing.T) {
 		if result.Body != "test comment" {
 			t.Errorf("body = %s, want 'test comment'", result.Body)
 		}
-		if result.Action != plan.ActionTodo {
-			t.Errorf("action = %s, want todo", result.Action)
+		if result.Action != plan.ActionQuestion {
+			t.Errorf("action = %s, want question", result.Action)
 		}
 	})
 
