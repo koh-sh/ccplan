@@ -94,6 +94,111 @@ func TestDetailPaneSetSize(t *testing.T) {
 	}
 }
 
+func TestDetailPaneHorizontalScroll(t *testing.T) {
+	const width = 40
+	dp := NewDetailPane(width, 40, "dark")
+
+	longCode := "```\n" + strings.Repeat("x", 100) + "\n```"
+	step := &plan.Step{ID: "S1", Title: "Test", Body: longCode}
+
+	dp.ShowStep(step, nil)
+
+	// Verify scroll starts at 0%
+	if pct := dp.Viewport().HorizontalScrollPercent(); pct != 0 {
+		t.Errorf("initial HorizontalScrollPercent = %f, want 0", pct)
+	}
+
+	// Scroll right and verify position changed
+	dp.Viewport().ScrollRight(4)
+	if pct := dp.Viewport().HorizontalScrollPercent(); pct == 0 {
+		t.Error("after ScrollRight(4) HorizontalScrollPercent should be > 0")
+	}
+
+	// ShowStep resets scroll position
+	dp.Viewport().ScrollRight(10)
+	dp.ShowStep(step, nil)
+	if pct := dp.Viewport().HorizontalScrollPercent(); pct != 0 {
+		t.Errorf("after ShowStep HorizontalScrollPercent = %f, want 0", pct)
+	}
+}
+
+func TestWrapProse(t *testing.T) {
+	tests := []struct {
+		name  string
+		md    string
+		width int
+		want  string
+	}{
+		{"empty string", "", 40, ""},
+		{"zero width returns as-is", "some long text here", 0, "some long text here"},
+		{"negative width returns as-is", "text", -1, "text"},
+		{"short line no wrap", "hello world", 40, "hello world"},
+		{"long prose wrapped", "aaa bbb ccc ddd", 7, "aaa bbb\nccc ddd"},
+		{
+			"backtick code block preserved",
+			"```\n" + strings.Repeat("x", 100) + "\n```",
+			20,
+			"```\n" + strings.Repeat("x", 100) + "\n```",
+		},
+		{
+			"tilde code block preserved",
+			"~~~\n" + strings.Repeat("y", 100) + "\n~~~",
+			20,
+			"~~~\n" + strings.Repeat("y", 100) + "\n~~~",
+		},
+		{
+			"prose outside code block wrapped",
+			"```\ncode line\n```\n" + strings.Repeat("word ", 20),
+			30,
+			"```\ncode line\n```\n" + func() string {
+				got := wrapProse(strings.Repeat("word ", 20), 30)
+				return got
+			}(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := wrapProse(tt.md, tt.width)
+			if got != tt.want {
+				t.Errorf("wrapProse(%q, %d):\n got: %q\nwant: %q", tt.md, tt.width, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSoftWrapLine(t *testing.T) {
+	tests := []struct {
+		name  string
+		line  string
+		width int
+		want  []string
+	}{
+		{"empty line", "   ", 40, []string{"   "}},
+		{"single word fits", "hello", 40, []string{"hello"}},
+		{"wraps at boundary", "aaa bbb ccc", 7, []string{"aaa bbb", "ccc"}},
+		{
+			"preserves leading indent",
+			"  - item one two three",
+			14,
+			[]string{"  - item one", "  two three"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := softWrapLine(tt.line, tt.width)
+			if len(got) != len(tt.want) {
+				t.Fatalf("softWrapLine(%q, %d) returned %d lines, want %d:\n got: %q\nwant: %q",
+					tt.line, tt.width, len(got), len(tt.want), got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("line[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestCustomStyle(t *testing.T) {
 	dark := customStyle("dark")
 	light := customStyle("light")

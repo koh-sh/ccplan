@@ -30,6 +30,9 @@ const (
 	FocusRight
 )
 
+// scrollToEnd is a value large enough to be clamped to the maximum horizontal offset.
+const scrollToEnd = 1 << 30
+
 // AppResult is the result returned when the TUI exits.
 type AppResult struct {
 	Review *plan.ReviewResult
@@ -252,11 +255,24 @@ func (a *App) handleLeftPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleRightPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "H":
+		a.detail.Viewport().SetXOffset(0)
+		return a, nil
+	case "L":
+		a.detail.Viewport().SetXOffset(scrollToEnd)
+		return a, nil
+	}
+
 	switch {
 	case key.Matches(msg, a.keymap.Up):
 		a.detail.Viewport().ScrollUp(1)
 	case key.Matches(msg, a.keymap.Down):
 		a.detail.Viewport().ScrollDown(1)
+	case key.Matches(msg, a.keymap.Expand):
+		a.detail.Viewport().ScrollRight(4)
+	case key.Matches(msg, a.keymap.Collapse):
+		a.detail.Viewport().ScrollLeft(4)
 	}
 	return a, nil
 }
@@ -683,8 +699,9 @@ func (a *App) renderHelp() string {
     gg              Go to top
     G               Go to bottom
     Enter           Toggle expand/collapse
-    l/Right         Expand step
-    h/Left          Collapse step (or go to parent)
+    l/Right         Expand step (left pane) / Scroll right (right pane)
+    h/Left          Collapse step (left pane) / Scroll left (right pane)
+    L/H             Scroll to end/start (right pane)
     Tab             Switch between left/right pane
 
   Review:

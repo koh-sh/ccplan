@@ -108,7 +108,8 @@ Set `PLAN_REVIEW_SKIP=1` to temporarily disable the hook.
 |-----|--------|
 | `j` / `k` / `↑` / `↓` | Navigate steps |
 | `gg` / `G` | Jump to first / last step |
-| `l` / `h` / `→` / `←` | Expand / collapse |
+| `l` / `h` / `→` / `←` | Expand / collapse (left pane) / Scroll right / left (right pane) |
+| `H` / `L` | Scroll to start / end (right pane) |
 | `Enter` | Toggle expand/collapse |
 | `Tab` | Switch focus between panes |
 | `c` | Add comment |

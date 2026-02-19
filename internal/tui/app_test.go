@@ -790,6 +790,94 @@ func TestRightPaneScroll(t *testing.T) {
 	}
 }
 
+func TestRightPaneHorizontalScroll(t *testing.T) {
+	p := &plan.Plan{
+		Title: "Test",
+		Steps: []*plan.Step{
+			{
+				ID:    "S1",
+				Title: "Long Code",
+				Level: 2,
+				Body:  "```\n" + strings.Repeat("ABCDEFGHIJ", 20) + "\n```",
+			},
+		},
+	}
+	a := initApp(t, p)
+
+	// Select step S1 in left pane, then switch to right pane
+	a.Update(keyMsg("j")) // move to S1
+	a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if a.focus != FocusRight {
+		t.Fatal("focus should be right after Tab")
+	}
+
+	// Check detail.View() changes
+	detailBefore := a.detail.View()
+	before := a.detail.Viewport().HorizontalScrollPercent()
+
+	a.Update(keyMsg("l"))
+	detailAfter := a.detail.View()
+	after := a.detail.Viewport().HorizontalScrollPercent()
+	if after <= before {
+		t.Errorf("l in right pane should scroll right: before=%f, after=%f", before, after)
+	}
+	if detailBefore == detailAfter {
+		t.Error("detail.View() should change after horizontal scroll")
+	}
+
+	// Check full app View() changes
+	appViewBefore := a.View()
+	a.Update(keyMsg("l"))
+	appViewAfter := a.View()
+	if appViewBefore == appViewAfter {
+		t.Error("app.View() should change after horizontal scroll")
+	}
+
+	// Press 'h' to scroll left
+	beforeH := a.detail.Viewport().HorizontalScrollPercent()
+	a.Update(keyMsg("h"))
+	afterLeft := a.detail.Viewport().HorizontalScrollPercent()
+	if afterLeft >= beforeH {
+		t.Errorf("h in right pane should scroll left: before=%f, after=%f", beforeH, afterLeft)
+	}
+}
+
+func TestRightPaneHorizontalScrollJump(t *testing.T) {
+	p := &plan.Plan{
+		Title: "Test",
+		Steps: []*plan.Step{
+			{
+				ID:    "S1",
+				Title: "Long Code",
+				Level: 2,
+				Body:  "```\n" + strings.Repeat("ABCDEFGHIJ", 20) + "\n```",
+			},
+		},
+	}
+	a := initApp(t, p)
+
+	// Select step S1 in left pane, then switch to right pane
+	a.Update(keyMsg("j")) // move to S1
+	a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if a.focus != FocusRight {
+		t.Fatal("focus should be right after Tab")
+	}
+
+	// 'L' scrolls to end
+	a.Update(keyMsg("L"))
+	endPct := a.detail.Viewport().HorizontalScrollPercent()
+	if endPct != 1.0 {
+		t.Errorf("L should scroll to end: got %f, want 1.0", endPct)
+	}
+
+	// 'H' scrolls to start
+	a.Update(keyMsg("H"))
+	startPct := a.detail.Viewport().HorizontalScrollPercent()
+	if startPct != 0.0 {
+		t.Errorf("H should scroll to start: got %f, want 0.0", startPct)
+	}
+}
+
 func TestViewNotReady(t *testing.T) {
 	app := NewApp(makeLargePlan(3, 0), AppOptions{})
 	view := app.View()
