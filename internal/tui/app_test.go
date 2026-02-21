@@ -460,26 +460,27 @@ func TestLeftPaneToggle(t *testing.T) {
 	}
 }
 
-func TestLeftPaneExpandCollapse(t *testing.T) {
-	p := makeLargePlan(3, 2)
+func TestLeftPaneHorizontalScroll(t *testing.T) {
+	// Use a code block with a wide line so wrapProse does not wrap it.
+	p := &plan.Plan{Title: "Wide Plan"}
+	wideLine := "```\n" + strings.Repeat("x", 300) + "\n```"
+	p.Steps = append(p.Steps, &plan.Step{
+		ID: "S1", Title: "Wide Step", Level: 2, Body: wideLine,
+	})
 	a := initApp(t, p)
 
 	a.Update(keyMsg("j")) // S1
 
-	// Collapse with h
-	a.Update(keyMsg("h"))
-	for _, item := range a.stepList.items {
-		if item.Step != nil && item.Step.ID == "S1" && item.Expanded {
-			t.Error("S1 should be collapsed after h")
-		}
+	// Scroll right with l
+	a.Update(keyMsg("l"))
+	if pct := a.detail.Viewport().HorizontalScrollPercent(); pct == 0 {
+		t.Error("after l, HorizontalScrollPercent should be > 0")
 	}
 
-	// Expand with l
-	a.Update(keyMsg("l"))
-	for _, item := range a.stepList.items {
-		if item.Step != nil && item.Step.ID == "S1" && !item.Expanded {
-			t.Error("S1 should be expanded after l")
-		}
+	// Scroll left with h (back to start)
+	a.Update(keyMsg("h"))
+	if pct := a.detail.Viewport().HorizontalScrollPercent(); pct != 0 {
+		t.Errorf("after h, HorizontalScrollPercent = %f, want 0", pct)
 	}
 }
 

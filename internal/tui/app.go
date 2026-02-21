@@ -228,10 +228,16 @@ func (a *App) handleLeftPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.stepList.ToggleExpand()
 
 	case key.Matches(msg, a.keymap.Expand):
-		a.stepList.Expand()
+		a.detail.Viewport().ScrollRight(4)
 
 	case key.Matches(msg, a.keymap.Collapse):
-		a.stepList.Collapse()
+		a.detail.Viewport().ScrollLeft(4)
+
+	case key.Matches(msg, a.keymap.ScrollToStart):
+		a.detail.Viewport().SetXOffset(0)
+
+	case key.Matches(msg, a.keymap.ScrollToEnd):
+		a.detail.Viewport().SetXOffset(scrollToEnd)
 
 	case key.Matches(msg, a.keymap.Comment):
 		if step := a.stepList.Selected(); step != nil {
@@ -659,6 +665,7 @@ func (a *App) renderStatusBar() string {
 		a.statusEntry("j/k", "navigate") + "  " +
 			a.statusEntry("gg/G", "top/bottom") + "  " +
 			a.statusEntry("enter", "toggle") + "  " +
+			a.statusEntry("h/l", "scroll") + "  " +
 			a.statusEntry("c", "comment") + "  " +
 			a.statusEntry("C", "comments") + "  " +
 			a.statusEntry("v", "viewed") + "  " +
@@ -704,9 +711,8 @@ func (a *App) renderHelp() string {
     gg              Go to top
     G               Go to bottom
     Enter           Toggle expand/collapse
-    l/Right         Expand step (left pane) / Scroll right (right pane)
-    h/Left          Collapse step (left pane) / Scroll left (right pane)
-    L/H             Scroll to end/start (right pane)
+    h/l, Left/Right Scroll detail pane left/right
+    H/L             Scroll detail to start/end
     Tab             Switch between left/right pane
 
   Review:
