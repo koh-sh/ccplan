@@ -22,7 +22,7 @@ func TestStatePath(t *testing.T) {
 	}
 }
 
-func Test_contentHash(t *testing.T) {
+func TestContentHash(t *testing.T) {
 	s1 := &Step{Title: "Step 1", Body: "body text"}
 	s2 := &Step{Title: "Step 1", Body: "body text"}
 	s3 := &Step{Title: "Step 1", Body: "different body"}

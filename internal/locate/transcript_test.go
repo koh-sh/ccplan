@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func Test_findPlanFilesInTranscript(t *testing.T) {
+func TestFindPlanFilesInTranscript(t *testing.T) {
 	transcriptPath := filepath.Join("testdata", "transcript-with-plan.jsonl")
 	plansDir := "/tmp/test-plans"
 

@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/ansi"
-	styles "github.com/charmbracelet/glamour/styles"
+	glamourStyles "github.com/charmbracelet/glamour/styles"
 	"github.com/koh-sh/ccplan/internal/plan"
 	"github.com/mattn/go-runewidth"
 )
@@ -31,9 +31,9 @@ type DetailPane struct {
 func customStyle(theme string) ansi.StyleConfig {
 	var style ansi.StyleConfig
 	if theme == "light" {
-		style = styles.LightStyleConfig
+		style = glamourStyles.LightStyleConfig
 	} else {
-		style = styles.DarkStyleConfig
+		style = glamourStyles.DarkStyleConfig
 	}
 	if style.CodeBlock.Chroma != nil {
 		chroma := *style.CodeBlock.Chroma

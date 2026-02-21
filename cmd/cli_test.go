@@ -152,7 +152,7 @@ func TestWriteReviewOutput(t *testing.T) {
 		}
 	})
 
-	t.Run("file_write_success", func(t *testing.T) {
+	t.Run("file write success", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		outFile := filepath.Join(tmpDir, "output.txt")
 		// Create the file first so WriteFile can succeed
@@ -174,7 +174,7 @@ func TestWriteReviewOutput(t *testing.T) {
 		}
 	})
 
-	t.Run("file_missing_output_path", func(t *testing.T) {
+	t.Run("file missing output path", func(t *testing.T) {
 		err := writeReviewOutput("review", "file", "")
 		if err == nil {
 			t.Fatal("expected error for empty output path")
@@ -184,7 +184,7 @@ func TestWriteReviewOutput(t *testing.T) {
 		}
 	})
 
-	t.Run("file_deleted_falls_back", func(t *testing.T) {
+	t.Run("file deleted falls back", func(t *testing.T) {
 		// Simulate hook timeout scenario: file was created then deleted.
 		tmpDir := t.TempDir()
 		outFile := filepath.Join(tmpDir, "output.txt")
@@ -217,7 +217,7 @@ func TestWriteReviewOutput(t *testing.T) {
 		}
 	})
 
-	t.Run("file_write_error_returns_error", func(t *testing.T) {
+	t.Run("file write error returns error", func(t *testing.T) {
 		// Create a read-only directory to cause a permission error
 		tmpDir := t.TempDir()
 		readOnlyDir := filepath.Join(tmpDir, "readonly")
