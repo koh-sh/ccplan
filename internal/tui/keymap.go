@@ -19,6 +19,14 @@ type KeyMap struct {
 	Help        key.Binding
 	Save        key.Binding
 	Cancel      key.Binding
+
+	// Right pane specific
+	ScrollToStart key.Binding
+	ScrollToEnd   key.Binding
+
+	// Comment list specific
+	Edit   key.Binding
+	Delete key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -83,6 +91,22 @@ func DefaultKeyMap() KeyMap {
 		Cancel: key.NewBinding(
 			key.WithKeys("esc"),
 			key.WithHelp("esc", "cancel"),
+		),
+		ScrollToStart: key.NewBinding(
+			key.WithKeys("H"),
+			key.WithHelp("H", "scroll to start"),
+		),
+		ScrollToEnd: key.NewBinding(
+			key.WithKeys("L"),
+			key.WithHelp("L", "scroll to end"),
+		),
+		Edit: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("e", "edit"),
+		),
+		Delete: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "delete"),
 		),
 	}
 }

@@ -6,27 +6,33 @@ import (
 
 func TestStylesForTheme(t *testing.T) {
 	tests := []struct {
-		theme string
+		theme    string
+		wantDark bool // true if expected to use dark palette
 	}{
-		{"dark"},
-		{"light"},
-		{""},
+		{"dark", true},
+		{"light", false},
+		{"", true}, // empty defaults to dark
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.theme, func(t *testing.T) {
 			s := stylesForTheme(tt.theme)
-			// Just verify it returns a valid Styles struct (not zero value)
+
 			if s.Title.GetBold() != true {
 				t.Error("Title style should be bold")
 			}
-		})
-	}
-}
+			if s.StatusKey.GetBold() != true {
+				t.Error("StatusKey style should be bold")
+			}
 
-func TestDefaultStyles(t *testing.T) {
-	s := DefaultStyles()
-	if s.Title.GetBold() != true {
-		t.Error("DefaultStyles Title should be bold")
+			// Verify dark and light produce different colors
+			dark := stylesForTheme("dark")
+			light := stylesForTheme("light")
+			darkFg := dark.SelectedStep.GetForeground()
+			lightFg := light.SelectedStep.GetForeground()
+			if darkFg == lightFg {
+				t.Error("dark and light themes should produce different SelectedStep foreground colors")
+			}
+		})
 	}
 }

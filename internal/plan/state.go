@@ -22,8 +22,8 @@ func StatePath(planFile string) string {
 	return planFile + ".reviewed.json"
 }
 
-// ContentHash computes a truncated SHA-256 hash of a step's title and body.
-func ContentHash(s *Step) string {
+// contentHash computes a truncated SHA-256 hash of a step's title and body.
+func contentHash(s *Step) string {
 	h := sha256.Sum256([]byte(s.Title + "\x00" + s.Body))
 	return fmt.Sprintf("%x", h[:8])
 }
@@ -62,12 +62,12 @@ func (vs *ViewedState) IsStepViewed(s *Step) bool {
 	if !ok {
 		return false
 	}
-	return hash == ContentHash(s)
+	return hash == contentHash(s)
 }
 
 // MarkViewed records a step as viewed with its current content hash.
 func (vs *ViewedState) MarkViewed(s *Step) {
-	vs.Steps[s.Title] = ContentHash(s)
+	vs.Steps[s.Title] = contentHash(s)
 }
 
 // UnmarkViewed removes a step's viewed status.

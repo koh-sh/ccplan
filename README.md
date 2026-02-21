@@ -73,6 +73,14 @@ ccplan hook
 
 > **Note:** Currently only WezTerm is supported as a terminal multiplexer spawner. tmux support is not yet implemented. `auto` will try WezTerm first, then fall back to running in the same terminal.
 
+### `ccplan version`
+
+Show the current version.
+
+```bash
+ccplan version
+```
+
 ## Claude Code Hook Setup
 
 Add the following to `.claude/settings.json`:
@@ -169,4 +177,4 @@ Please review and address the following comments on: /path/to/plan.md
 [question] Is the coverage target 80% or 90%?
 ```
 
-Labels: `suggestion`, `issue`, `question`, `nitpick`, `todo` (default), `thought`, `note`, `praise`, `chore`
+Labels: `suggestion`, `issue`, `question` (default), `nitpick`, `todo`, `thought`, `note`, `praise`, `chore`

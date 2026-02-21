@@ -482,7 +482,7 @@ func TestSelectedAndIsOverviewSelected(t *testing.T) {
 
 func TestRender(t *testing.T) {
 	sl := NewStepList(makePlanWithChildren(), nil)
-	styles := DefaultStyles()
+	styles := defaultStyles()
 	output := sl.Render(80, 20, styles)
 
 	if !strings.Contains(output, "Overview") {
@@ -499,7 +499,7 @@ func TestRender(t *testing.T) {
 
 func TestRenderBadge(t *testing.T) {
 	sl := NewStepList(makePlanWithChildren(), nil)
-	styles := DefaultStyles()
+	styles := defaultStyles()
 
 	// No badge
 	badge := sl.renderBadge("S1", styles)
@@ -545,7 +545,7 @@ func TestTruncateMaxWidthThree(t *testing.T) {
 
 func TestRenderCollapsedStep(t *testing.T) {
 	sl := NewStepList(makePlanWithChildren(), nil)
-	styles := DefaultStyles()
+	styles := defaultStyles()
 
 	// Collapse S1 to get ▶ prefix rendered
 	sl.CursorDown() // move to S1

@@ -265,16 +265,11 @@ func (a *App) handleLeftPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleRightPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "H":
-		a.detail.Viewport().SetXOffset(0)
-		return a, nil
-	case "L":
-		a.detail.Viewport().SetXOffset(scrollToEnd)
-		return a, nil
-	}
-
 	switch {
+	case key.Matches(msg, a.keymap.ScrollToStart):
+		a.detail.Viewport().SetXOffset(0)
+	case key.Matches(msg, a.keymap.ScrollToEnd):
+		a.detail.Viewport().SetXOffset(scrollToEnd)
 	case key.Matches(msg, a.keymap.Up):
 		a.detail.Viewport().ScrollUp(1)
 	case key.Matches(msg, a.keymap.Down):
@@ -349,8 +344,8 @@ func (a *App) handleCommentListMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	switch msg.String() {
-	case "e":
+	switch {
+	case key.Matches(msg, a.keymap.Edit):
 		// Edit selected comment
 		stepID := a.commentList.StepID()
 		idx := a.commentList.Cursor()
@@ -361,7 +356,7 @@ func (a *App) handleCommentListMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.mode = ModeComment
 			return a, a.comment.textarea.Focus()
 		}
-	case "d":
+	case key.Matches(msg, a.keymap.Delete):
 		// Delete selected comment
 		stepID := a.commentList.StepID()
 		idx := a.commentList.Cursor()

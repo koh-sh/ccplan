@@ -7,13 +7,13 @@ import (
 	"testing"
 )
 
-func TestFindPlanFilesInTranscript(t *testing.T) {
+func Test_findPlanFilesInTranscript(t *testing.T) {
 	transcriptPath := filepath.Join("testdata", "transcript-with-plan.jsonl")
 	plansDir := "/tmp/test-plans"
 
-	paths, err := FindPlanFilesInTranscript(transcriptPath, plansDir, false)
+	paths, err := findPlanFilesInTranscript(transcriptPath, plansDir, false)
 	if err != nil {
-		t.Fatalf("FindPlanFilesInTranscript() error: %v", err)
+		t.Fatalf("findPlanFilesInTranscript() error: %v", err)
 	}
 
 	if len(paths) != 1 {
@@ -30,9 +30,9 @@ func TestFindPlanFilesNoPlan(t *testing.T) {
 	transcriptPath := filepath.Join("testdata", "transcript-no-plan.jsonl")
 	plansDir := "/tmp/test-plans"
 
-	paths, err := FindPlanFilesInTranscript(transcriptPath, plansDir, false)
+	paths, err := findPlanFilesInTranscript(transcriptPath, plansDir, false)
 	if err != nil {
-		t.Fatalf("FindPlanFilesInTranscript() error: %v", err)
+		t.Fatalf("findPlanFilesInTranscript() error: %v", err)
 	}
 
 	if len(paths) != 0 {
@@ -45,9 +45,9 @@ func TestFindPlanFilesMultiplePlans(t *testing.T) {
 	plansDir := "/tmp/test-plans"
 
 	// Latest only
-	paths, err := FindPlanFilesInTranscript(transcriptPath, plansDir, false)
+	paths, err := findPlanFilesInTranscript(transcriptPath, plansDir, false)
 	if err != nil {
-		t.Fatalf("FindPlanFilesInTranscript() error: %v", err)
+		t.Fatalf("findPlanFilesInTranscript() error: %v", err)
 	}
 	if len(paths) != 1 {
 		t.Fatalf("len(paths) = %d, want 1", len(paths))
@@ -58,9 +58,9 @@ func TestFindPlanFilesMultiplePlans(t *testing.T) {
 	}
 
 	// All
-	allPaths, err := FindPlanFilesInTranscript(transcriptPath, plansDir, true)
+	allPaths, err := findPlanFilesInTranscript(transcriptPath, plansDir, true)
 	if err != nil {
-		t.Fatalf("FindPlanFilesInTranscript(all) error: %v", err)
+		t.Fatalf("findPlanFilesInTranscript(all) error: %v", err)
 	}
 	if len(allPaths) != 2 {
 		t.Fatalf("len(allPaths) = %d, want 2", len(allPaths))
@@ -78,9 +78,9 @@ func TestFindPlanFilesMalformed(t *testing.T) {
 	transcriptPath := filepath.Join("testdata", "transcript-malformed.jsonl")
 	plansDir := "/tmp/test-plans"
 
-	paths, err := FindPlanFilesInTranscript(transcriptPath, plansDir, true)
+	paths, err := findPlanFilesInTranscript(transcriptPath, plansDir, true)
 	if err != nil {
-		t.Fatalf("FindPlanFilesInTranscript() error: %v", err)
+		t.Fatalf("findPlanFilesInTranscript() error: %v", err)
 	}
 
 	// Should find the valid line and skip malformed ones
@@ -93,9 +93,9 @@ func TestFindPlanFilesWrongDir(t *testing.T) {
 	transcriptPath := filepath.Join("testdata", "transcript-with-plan.jsonl")
 	plansDir := "/some/other/dir"
 
-	paths, err := FindPlanFilesInTranscript(transcriptPath, plansDir, false)
+	paths, err := findPlanFilesInTranscript(transcriptPath, plansDir, false)
 	if err != nil {
-		t.Fatalf("FindPlanFilesInTranscript() error: %v", err)
+		t.Fatalf("findPlanFilesInTranscript() error: %v", err)
 	}
 
 	if len(paths) != 0 {
@@ -104,7 +104,7 @@ func TestFindPlanFilesWrongDir(t *testing.T) {
 }
 
 func TestFindPlanFilesNonExistent(t *testing.T) {
-	_, err := FindPlanFilesInTranscript("/nonexistent/file.jsonl", "/tmp", false)
+	_, err := findPlanFilesInTranscript("/nonexistent/file.jsonl", "/tmp", false)
 	if err == nil {
 		t.Fatal("expected error for nonexistent file")
 	}
@@ -131,9 +131,9 @@ func TestFindPlanFilesWithEmptyLines(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	paths, err := FindPlanFilesInTranscript(transcriptFile, plansDir, true)
+	paths, err := findPlanFilesInTranscript(transcriptFile, plansDir, true)
 	if err != nil {
-		t.Fatalf("FindPlanFilesInTranscript() error: %v", err)
+		t.Fatalf("findPlanFilesInTranscript() error: %v", err)
 	}
 	if len(paths) != 1 {
 		t.Errorf("len(paths) = %d, want 1", len(paths))
@@ -151,7 +151,7 @@ func TestFindPlanFilesWithBadContentBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	paths, err := FindPlanFilesInTranscript(transcriptFile, filepath.Join(tmpDir, "plans"), true)
+	paths, err := findPlanFilesInTranscript(transcriptFile, filepath.Join(tmpDir, "plans"), true)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestFindPlanFilesWithBadInput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	paths, err := FindPlanFilesInTranscript(transcriptFile, filepath.Join(tmpDir, "plans"), true)
+	paths, err := findPlanFilesInTranscript(transcriptFile, filepath.Join(tmpDir, "plans"), true)
 	if err != nil {
 		t.Fatalf("error: %v", err)
 	}

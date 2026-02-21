@@ -22,23 +22,23 @@ func TestStatePath(t *testing.T) {
 	}
 }
 
-func TestContentHash(t *testing.T) {
+func Test_contentHash(t *testing.T) {
 	s1 := &Step{Title: "Step 1", Body: "body text"}
 	s2 := &Step{Title: "Step 1", Body: "body text"}
 	s3 := &Step{Title: "Step 1", Body: "different body"}
 
 	// Same content produces same hash
-	if ContentHash(s1) != ContentHash(s2) {
+	if contentHash(s1) != contentHash(s2) {
 		t.Error("identical steps should have same hash")
 	}
 
 	// Different content produces different hash
-	if ContentHash(s1) == ContentHash(s3) {
+	if contentHash(s1) == contentHash(s3) {
 		t.Error("different steps should have different hash")
 	}
 
 	// Hash is 16 hex chars (8 bytes)
-	hash := ContentHash(s1)
+	hash := contentHash(s1)
 	if len(hash) != 16 {
 		t.Errorf("hash length = %d, want 16", len(hash))
 	}

@@ -29,11 +29,11 @@ type writeInput struct {
 	FilePath string `json:"file_path"`
 }
 
-// FindPlanFilesInTranscript reads a transcript JSONL file and finds plan file paths.
+// findPlanFilesInTranscript reads a transcript JSONL file and finds plan file paths.
 // It scans for assistant messages containing Write tool_use calls where the
 // file_path is under the given plansDir.
 // If all is true, returns all found plan files. Otherwise returns only the latest.
-func FindPlanFilesInTranscript(transcriptPath, plansDir string, all bool) ([]string, error) {
+func findPlanFilesInTranscript(transcriptPath, plansDir string, all bool) ([]string, error) {
 	f, err := os.Open(transcriptPath)
 	if err != nil {
 		return nil, err

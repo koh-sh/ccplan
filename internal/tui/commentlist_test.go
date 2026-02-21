@@ -108,7 +108,7 @@ func TestCommentListRender(t *testing.T) {
 	}
 	cl.Open("S1", comments)
 
-	styles := DefaultStyles()
+	styles := defaultStyles()
 	output := cl.Render(80, 20, styles)
 
 	if !strings.Contains(output, "S1") {

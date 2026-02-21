@@ -52,7 +52,7 @@ func LocatePlanFile(opts Options) ([]string, error) {
 		return nil, fmt.Errorf("could not resolve plans directory")
 	}
 
-	paths, err := FindPlanFilesInTranscript(opts.TranscriptPath, plansDir, opts.All)
+	paths, err := findPlanFilesInTranscript(opts.TranscriptPath, plansDir, opts.All)
 	if err != nil {
 		return nil, fmt.Errorf("scanning transcript: %w", err)
 	}
