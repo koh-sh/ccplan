@@ -24,6 +24,10 @@ type KeyMap struct {
 	ScrollToStart key.Binding
 	ScrollToEnd   key.Binding
 
+	// Pane resizing
+	PaneGrow   key.Binding
+	PaneShrink key.Binding
+
 	// Comment list specific
 	Edit   key.Binding
 	Delete key.Binding
@@ -99,6 +103,14 @@ func DefaultKeyMap() KeyMap {
 		ScrollToEnd: key.NewBinding(
 			key.WithKeys("L"),
 			key.WithHelp("L", "scroll to end"),
+		),
+		PaneGrow: key.NewBinding(
+			key.WithKeys(">"),
+			key.WithHelp(">/<", "resize pane"),
+		),
+		PaneShrink: key.NewBinding(
+			key.WithKeys("<"),
+			key.WithHelp("", ""),
 		),
 		Edit: key.NewBinding(
 			key.WithKeys("e"),

@@ -395,8 +395,39 @@ func (sl *StepList) renderBadge(stepID string, styles Styles) string {
 	return badge
 }
 
+// TotalStepCount returns the number of steps (excluding overview).
+func (sl *StepList) TotalStepCount() int {
+	count := 0
+	for _, item := range sl.items {
+		if !item.IsOverview && item.Step != nil {
+			count++
+		}
+	}
+	return count
+}
+
+// ViewedCount returns the number of viewed steps.
+func (sl *StepList) ViewedCount() int {
+	count := 0
+	for _, viewed := range sl.viewed {
+		if viewed {
+			count++
+		}
+	}
+	return count
+}
+
+// TotalCommentCount returns the total number of comments across all steps.
+func (sl *StepList) TotalCommentCount() int {
+	count := 0
+	for _, comments := range sl.comments {
+		count += len(comments)
+	}
+	return count
+}
+
 // FilterByQuery filters the step list to show only steps matching the query.
-// Matching is case-insensitive against step ID + Title.
+// Matching is case-insensitive against step ID, Title, and Body.
 // If a child matches, its ancestors are shown. If a parent matches, its children are shown.
 func (sl *StepList) FilterByQuery(query string) {
 	if query == "" {
@@ -418,7 +449,7 @@ func (sl *StepList) FilterByQuery(query string) {
 		if item.Step == nil {
 			continue
 		}
-		text := strings.ToLower(item.Step.ID + " " + item.Step.Title)
+		text := strings.ToLower(item.Step.ID + " " + item.Step.Title + " " + item.Step.Body)
 		if strings.Contains(text, query) {
 			matched[i] = true
 		}

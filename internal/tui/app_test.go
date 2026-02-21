@@ -908,9 +908,20 @@ func TestRenderStatusBarModes(t *testing.T) {
 
 	// Normal mode
 	sb := a.renderStatusBar()
-	if !strings.Contains(sb, "navigate") {
-		t.Error("normal mode status bar should contain 'navigate'")
+	if !strings.Contains(sb, "comment") {
+		t.Error("normal mode status bar should contain 'comment'")
 	}
+	if !strings.Contains(sb, "viewed") {
+		t.Error("normal mode status bar should contain progress 'viewed'")
+	}
+
+	// Normal mode with comments - verify comment count display
+	a.stepList.AddComment("S1", &plan.ReviewComment{Body: "test"})
+	sb = a.renderStatusBar()
+	if !strings.Contains(sb, "comments") {
+		t.Error("normal mode status bar should show comment count when comments exist")
+	}
+	a.stepList.DeleteComment("S1", 0)
 
 	// Comment mode
 	a.mode = ModeComment
@@ -1184,6 +1195,63 @@ func TestLeftRightWidth(t *testing.T) {
 	if lw != 58 { // 60 - 2
 		t.Errorf("leftWidth in single pane = %d, want 58", lw)
 	}
+}
+
+func TestPaneResize(t *testing.T) {
+	t.Run("grow and shrink", func(t *testing.T) {
+		a := initApp(t, makeLargePlan(3, 0))
+		initialRatio := a.leftRatio
+		initialLW := a.leftWidth()
+
+		a.Update(keyMsg(">"))
+		if a.leftRatio != initialRatio+5 {
+			t.Errorf("leftRatio after > = %d, want %d", a.leftRatio, initialRatio+5)
+		}
+		if a.leftWidth() <= initialLW {
+			t.Error("leftWidth should increase after >")
+		}
+
+		a.Update(keyMsg("<"))
+		if a.leftRatio != initialRatio {
+			t.Errorf("leftRatio after < = %d, want %d", a.leftRatio, initialRatio)
+		}
+	})
+
+	t.Run("upper bound", func(t *testing.T) {
+		a := initApp(t, makeLargePlan(3, 0))
+		a.leftRatio = 50
+		a.Update(keyMsg(">"))
+		if a.leftRatio != 50 {
+			t.Errorf("leftRatio should not exceed 50, got %d", a.leftRatio)
+		}
+	})
+
+	t.Run("lower bound", func(t *testing.T) {
+		a := initApp(t, makeLargePlan(3, 0))
+		a.leftRatio = 10
+		a.Update(keyMsg("<"))
+		if a.leftRatio != 10 {
+			t.Errorf("leftRatio should not go below 10, got %d", a.leftRatio)
+		}
+	})
+
+	t.Run("disabled in single pane", func(t *testing.T) {
+		app := NewApp(makeLargePlan(3, 0), AppOptions{})
+		model, _ := app.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+		a, ok := model.(*App)
+		if !ok {
+			t.Fatalf("model type = %T, want *App", model)
+		}
+		initialRatio := a.leftRatio
+		a.Update(keyMsg(">"))
+		if a.leftRatio != initialRatio {
+			t.Errorf("leftRatio should not change in single pane, got %d", a.leftRatio)
+		}
+		a.Update(keyMsg("<"))
+		if a.leftRatio != initialRatio {
+			t.Errorf("leftRatio should not change in single pane, got %d", a.leftRatio)
+		}
+	})
 }
 
 func TestHandleKeyUnknownMode(t *testing.T) {

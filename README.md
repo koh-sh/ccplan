@@ -121,6 +121,7 @@ Set `PLAN_REVIEW_SKIP=1` to temporarily disable the hook.
 | `gg` / `G` | Jump to first / last step |
 | `l` / `h` / `→` / `←` | Expand / collapse (left pane) / Scroll right / left (right pane) |
 | `H` / `L` | Scroll to start / end (right pane) |
+| `>` / `<` | Resize left pane wider / narrower |
 | `Enter` | Toggle expand/collapse |
 | `Tab` | Switch focus between panes |
 | `c` | Add comment |
@@ -149,11 +150,15 @@ Set `PLAN_REVIEW_SKIP=1` to temporarily disable the hook.
 | `d` | Delete selected comment |
 | `Esc` | Back to normal mode |
 
+### Status Bar
+
+The status bar shows key hints and a progress indicator: `[X/Y viewed]` for steps marked as viewed, and `[N comments]` when comments have been added.
+
 ### Search Mode
 
 | Key | Action |
 |-----|--------|
-| Type text | Incremental filter |
+| Type text | Incremental filter (searches ID, title, and body) |
 | `j` / `k` | Navigate results |
 | `Enter` | Confirm search |
 | `Esc` | Cancel search |

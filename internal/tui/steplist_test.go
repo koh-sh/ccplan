@@ -438,6 +438,25 @@ func TestFilterByQuery(t *testing.T) {
 		}
 	})
 
+	t.Run("body match", func(t *testing.T) {
+		sl := NewStepList(makePlanWithChildren(), nil)
+		sl.FilterByQuery("Body 2")
+		for _, item := range sl.items {
+			if item.Step != nil && item.Step.ID == "S2" && !item.Visible {
+				t.Error("S2 should match via body text")
+			}
+			if item.Step != nil && item.Step.ID == "S1" && item.Visible {
+				t.Error("S1 should be hidden when only S2 body matches")
+			}
+			if item.Step != nil && item.Step.ID == "S1.1" && item.Visible {
+				t.Error("S1.1 should be hidden when only S2 body matches")
+			}
+			if item.Step != nil && item.Step.ID == "S1.2" && item.Visible {
+				t.Error("S1.2 should be hidden when only S2 body matches")
+			}
+		}
+	})
+
 	t.Run("cursor moves to visible on hidden", func(t *testing.T) {
 		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.CursorBottom() // S2
@@ -613,6 +632,53 @@ func TestGetComments(t *testing.T) {
 	comments = sl.GetComments("S1")
 	if len(comments) != 1 {
 		t.Errorf("expected 1 comment, got %d", len(comments))
+	}
+}
+
+func TestTotalStepCount(t *testing.T) {
+	sl := NewStepList(makePlanWithChildren(), nil)
+	// S1, S1.1, S1.2, S2 = 4 steps (overview excluded)
+	if got := sl.TotalStepCount(); got != 4 {
+		t.Errorf("TotalStepCount = %d, want 4", got)
+	}
+
+	sl2 := NewStepList(makePlanNoPreamble(), nil)
+	if got := sl2.TotalStepCount(); got != 1 {
+		t.Errorf("TotalStepCount (no preamble) = %d, want 1", got)
+	}
+}
+
+func TestViewedCount(t *testing.T) {
+	sl := NewStepList(makePlanWithChildren(), nil)
+
+	if got := sl.ViewedCount(); got != 0 {
+		t.Errorf("ViewedCount initial = %d, want 0", got)
+	}
+
+	sl.ToggleViewed("S1")
+	sl.ToggleViewed("S2")
+	if got := sl.ViewedCount(); got != 2 {
+		t.Errorf("ViewedCount after marking 2 = %d, want 2", got)
+	}
+
+	sl.ToggleViewed("S1") // unmark
+	if got := sl.ViewedCount(); got != 1 {
+		t.Errorf("ViewedCount after unmarking 1 = %d, want 1", got)
+	}
+}
+
+func TestTotalCommentCount(t *testing.T) {
+	sl := NewStepList(makePlanWithChildren(), nil)
+
+	if got := sl.TotalCommentCount(); got != 0 {
+		t.Errorf("TotalCommentCount initial = %d, want 0", got)
+	}
+
+	sl.AddComment("S1", &plan.ReviewComment{Body: "a"})
+	sl.AddComment("S1", &plan.ReviewComment{Body: "b"})
+	sl.AddComment("S2", &plan.ReviewComment{Body: "c"})
+	if got := sl.TotalCommentCount(); got != 3 {
+		t.Errorf("TotalCommentCount = %d, want 3", got)
 	}
 }
 

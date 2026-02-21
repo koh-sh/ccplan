@@ -50,12 +50,13 @@ type App struct {
 	keymap      KeyMap
 	styles      Styles
 
-	mode   AppMode
-	focus  Focus
-	width  int
-	height int
-	ready  bool
-	opts   AppOptions
+	mode      AppMode
+	focus     Focus
+	width     int
+	height    int
+	ready     bool
+	leftRatio int // left pane width percentage (default 30, range 10-50)
+	opts      AppOptions
 
 	result         AppResult
 	pendingG       bool // gg chord: true when first 'g' was pressed
@@ -83,6 +84,7 @@ func NewApp(p *plan.Plan, opts AppOptions) *App {
 		search:         NewSearchBar(),
 		keymap:         DefaultKeyMap(),
 		styles:         stylesForTheme(opts.Theme),
+		leftRatio:      30,
 		opts:           opts,
 		editCommentIdx: -1,
 		result: AppResult{
@@ -206,6 +208,14 @@ func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, a.keymap.Submit):
 		return a.submitReview()
+
+	case key.Matches(msg, a.keymap.PaneGrow):
+		a.resizeLeftPane(5)
+		return a, nil
+
+	case key.Matches(msg, a.keymap.PaneShrink):
+		a.resizeLeftPane(-5)
+		return a, nil
 	}
 
 	if a.focus == FocusLeft {
@@ -519,11 +529,21 @@ func (a *App) contentHeight() int {
 	return h
 }
 
+func (a *App) resizeLeftPane(delta int) {
+	newRatio := a.leftRatio + delta
+	if a.width < 80 || newRatio < 10 || newRatio > 50 {
+		return
+	}
+	a.leftRatio = newRatio
+	a.updateLayout()
+	a.refreshDetail()
+}
+
 func (a *App) leftWidth() int {
 	if a.width < 80 {
 		return a.width - 2
 	}
-	return a.width * 30 / 100
+	return a.width * a.leftRatio / 100
 }
 
 func (a *App) rightWidth() int {
@@ -661,11 +681,13 @@ func (a *App) renderStatusBar() string {
 		return a.search.View()
 	}
 
+	progress := fmt.Sprintf("[%d/%d viewed]", a.stepList.ViewedCount(), a.stepList.TotalStepCount())
+	if commentCount := a.stepList.TotalCommentCount(); commentCount > 0 {
+		progress += fmt.Sprintf(" [%d comments]", commentCount)
+	}
+
 	return a.styles.StatusBar.Render(
-		a.statusEntry("j/k", "navigate") + "  " +
-			a.statusEntry("gg/G", "top/bottom") + "  " +
-			a.statusEntry("enter", "toggle") + "  " +
-			a.statusEntry("h/l", "scroll") + "  " +
+		a.statusEntry("enter", "toggle") + "  " +
 			a.statusEntry("c", "comment") + "  " +
 			a.statusEntry("C", "comments") + "  " +
 			a.statusEntry("v", "viewed") + "  " +
@@ -673,7 +695,8 @@ func (a *App) renderStatusBar() string {
 			a.statusEntry("s", "submit") + "  " +
 			a.statusEntry("tab", "switch") + "  " +
 			a.statusEntry("?", "help") + "  " +
-			a.statusEntry("q", "quit"),
+			a.statusEntry("q", "quit") + "  " +
+			progress,
 	)
 }
 
@@ -713,6 +736,7 @@ func (a *App) renderHelp() string {
     Enter           Toggle expand/collapse
     h/l, Left/Right Scroll detail pane left/right
     H/L             Scroll detail to start/end
+    >/<             Resize left pane
     Tab             Switch between left/right pane
 
   Review:
