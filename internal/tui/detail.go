@@ -18,12 +18,11 @@ const glamourHorizontalOverhead = 8
 
 // DetailPane manages the right pane that shows step details.
 type DetailPane struct {
-	viewport  viewport.Model
-	renderer  *glamour.TermRenderer
-	width     int
-	height    int
-	theme     string
-	wrapWidth int // prose wrap width (excludes glamour margins)
+	viewport viewport.Model
+	renderer *glamour.TermRenderer
+	width    int
+	height   int
+	theme    string
 }
 
 // customStyle returns a glamour style with red background removed from
@@ -56,12 +55,11 @@ func NewDetailPane(width, height int, theme string) *DetailPane {
 	)
 
 	return &DetailPane{
-		viewport:  vp,
-		renderer:  renderer,
-		width:     width,
-		height:    height,
-		theme:     theme,
-		wrapWidth: width - glamourHorizontalOverhead,
+		viewport: vp,
+		renderer: renderer,
+		width:    width,
+		height:   height,
+		theme:    theme,
 	}
 }
 
@@ -75,8 +73,6 @@ func (d *DetailPane) SetSize(width, height int) {
 	d.height = height
 	d.viewport.Width = width
 	d.viewport.Height = height
-
-	d.wrapWidth = width - glamourHorizontalOverhead
 
 	// Intentionally ignore error: renderContent falls back to plain text when renderer is nil.
 	d.renderer, _ = glamour.NewTermRenderer(
@@ -126,7 +122,8 @@ func (d *DetailPane) ShowOverview(p *plan.Plan) {
 
 // renderContent renders Markdown content into the viewport.
 func (d *DetailPane) renderContent(md string) {
-	md = wrapProse(md, d.wrapWidth)
+	wrapWidth := d.width - glamourHorizontalOverhead
+	md = wrapProse(md, wrapWidth)
 	rendered := md
 	if d.renderer != nil {
 		if r, err := d.renderer.Render(md); err == nil {
@@ -138,9 +135,10 @@ func (d *DetailPane) renderContent(md string) {
 	d.viewport.GotoTop()
 }
 
-// wrapProse wraps prose lines in Markdown to the given width while preserving
-// code blocks (fenced with ``` or ~~~) as-is. This allows glamour to render
-// with WordWrap(0) so code blocks keep their original formatting.
+// wrapProse wraps prose lines in Markdown to the given width using Markdown
+// hard breaks (two trailing spaces + newline). Code blocks (fenced with
+// ``` or ~~~) are preserved as-is. glamour is configured with WordWrap(0) so
+// it won't re-join these hard-broken lines or wrap code blocks.
 func wrapProse(md string, width int) string {
 	if width <= 0 {
 		return md
@@ -166,16 +164,28 @@ func wrapProse(md string, width int) string {
 			result = append(result, line)
 			continue
 		}
-		result = append(result, softWrapLine(line, width)...)
+		wrapped := softWrapLine(line, width)
+		needsHardWrap := false
+		for _, w := range wrapped {
+			// 末尾の "  " (hard break marker) を除いた幅で判定
+			if runewidth.StringWidth(strings.TrimRight(w, " ")) > width {
+				needsHardWrap = true
+				break
+			}
+		}
+		if needsHardWrap {
+			result = append(result, hardWrapCJK(line, width)...)
+		} else {
+			result = append(result, wrapped...)
+		}
 	}
 	return strings.Join(result, "\n")
 }
 
-// softWrapLine breaks a single long line at word boundaries, preserving
-// any leading whitespace indent on the first and continuation lines.
-// Uses display width (runewidth) so multibyte characters wrap correctly.
+// softWrapLine breaks a long line at word boundaries, appending two trailing
+// spaces to each continuation line so Markdown renders them as hard breaks.
+// Preserves leading whitespace indent.
 func softWrapLine(line string, width int) []string {
-	// Preserve leading whitespace.
 	trimmed := strings.TrimLeft(line, " \t")
 	indent := line[:len(line)-len(trimmed)]
 
@@ -196,7 +206,7 @@ func softWrapLine(line string, width int) []string {
 	for _, word := range words[1:] {
 		ww := runewidth.StringWidth(word)
 		if currentWidth+1+ww > effectiveWidth {
-			lines = append(lines, indent+current)
+			lines = append(lines, indent+current+"  ")
 			current = word
 			currentWidth = ww
 		} else {
@@ -205,6 +215,38 @@ func softWrapLine(line string, width int) []string {
 		}
 	}
 	lines = append(lines, indent+current)
+	return lines
+}
+
+// hardWrapCJK breaks a long line at character boundaries, appending two
+// trailing spaces to each continuation line so Markdown renders them as
+// hard breaks (<br>). Preserves leading whitespace indent.
+func hardWrapCJK(line string, width int) []string {
+	trimmed := strings.TrimLeft(line, " \t")
+	indent := line[:len(line)-len(trimmed)]
+	indentWidth := runewidth.StringWidth(indent)
+	effectiveWidth := width - indentWidth
+	if effectiveWidth <= 0 {
+		effectiveWidth = 1
+	}
+
+	var lines []string
+	var current strings.Builder
+	currentWidth := 0
+
+	for _, r := range trimmed {
+		rw := runewidth.RuneWidth(r)
+		if currentWidth+rw > effectiveWidth && currentWidth > 0 {
+			lines = append(lines, indent+current.String()+"  ")
+			current.Reset()
+			currentWidth = 0
+		}
+		current.WriteRune(r)
+		currentWidth += rw
+	}
+	if current.Len() > 0 {
+		lines = append(lines, indent+current.String())
+	}
 	return lines
 }
 

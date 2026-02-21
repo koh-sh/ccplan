@@ -133,7 +133,18 @@ func TestWrapProse(t *testing.T) {
 		{"zero width returns as-is", "some long text here", 0, "some long text here"},
 		{"negative width returns as-is", "text", -1, "text"},
 		{"short line no wrap", "hello world", 40, "hello world"},
-		{"long prose wrapped", "aaa bbb ccc ddd", 7, "aaa bbb\nccc ddd"},
+		{
+			"long English prose wrapped with hard breaks",
+			"aaa bbb ccc ddd",
+			7,
+			"aaa bbb  \nccc ddd",
+		},
+		{
+			"long CJK wrapped with hard breaks",
+			"あいうえおかきくけこ",
+			10,
+			"あいうえお  \nかきくけこ",
+		},
 		{
 			"backtick code block preserved",
 			"```\n" + strings.Repeat("x", 100) + "\n```",
@@ -142,18 +153,21 @@ func TestWrapProse(t *testing.T) {
 		},
 		{
 			"tilde code block preserved",
-			"~~~\n" + strings.Repeat("y", 100) + "\n~~~",
-			20,
-			"~~~\n" + strings.Repeat("y", 100) + "\n~~~",
+			"~~~\n" + strings.Repeat("あ", 50) + "\n~~~",
+			10,
+			"~~~\n" + strings.Repeat("あ", 50) + "\n~~~",
 		},
 		{
-			"prose outside code block wrapped",
-			"```\ncode line\n```\n" + strings.Repeat("word ", 20),
-			30,
-			"```\ncode line\n```\n" + func() string {
-				got := wrapProse(strings.Repeat("word ", 20), 30)
-				return got
-			}(),
+			"prose before and after code block",
+			"aaa bbb ccc ddd\n```\ncode\n```\neee fff ggg hhh",
+			7,
+			"aaa bbb  \nccc ddd\n```\ncode\n```\neee fff  \nggg hhh",
+		},
+		{
+			"mixed CJK and English",
+			"hello あいう world",
+			14,
+			"hello あいう  \nworld",
 		},
 	}
 	for _, tt := range tests {
@@ -175,12 +189,18 @@ func TestSoftWrapLine(t *testing.T) {
 	}{
 		{"empty line", "   ", 40, []string{"   "}},
 		{"single word fits", "hello", 40, []string{"hello"}},
-		{"wraps at boundary", "aaa bbb ccc", 7, []string{"aaa bbb", "ccc"}},
+		{"wraps at boundary", "aaa bbb ccc", 7, []string{"aaa bbb  ", "ccc"}},
 		{
 			"preserves leading indent",
 			"  - item one two three",
 			14,
-			[]string{"  - item one", "  two three"},
+			[]string{"  - item one  ", "  two three"},
+		},
+		{
+			"indent width >= width uses effectiveWidth 1",
+			"          word",
+			5,
+			[]string{"          word"},
 		},
 	}
 	for _, tt := range tests {
@@ -188,6 +208,38 @@ func TestSoftWrapLine(t *testing.T) {
 			got := softWrapLine(tt.line, tt.width)
 			if len(got) != len(tt.want) {
 				t.Fatalf("softWrapLine(%q, %d) returned %d lines, want %d:\n got: %q\nwant: %q",
+					tt.line, tt.width, len(got), len(tt.want), got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("line[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestHardWrapCJK(t *testing.T) {
+	tests := []struct {
+		name  string
+		line  string
+		width int
+		want  []string
+	}{
+		{"short line no wrap", "あいう", 10, []string{"あいう"}},
+		{"basic wrap", "あいうえおかきくけこ", 10, []string{"あいうえお  ", "かきくけこ"}},
+		{
+			"preserves leading indent",
+			"  あいうえおかきくけこ",
+			14,
+			[]string{"  あいうえおか  ", "  きくけこ"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := hardWrapCJK(tt.line, tt.width)
+			if len(got) != len(tt.want) {
+				t.Fatalf("hardWrapCJK(%q, %d) returned %d lines, want %d:\n got: %q\nwant: %q",
 					tt.line, tt.width, len(got), len(tt.want), got, tt.want)
 			}
 			for i := range got {
