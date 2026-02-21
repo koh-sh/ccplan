@@ -69,7 +69,7 @@ func TestSplitDirectionTallPixel(t *testing.T) {
 	}
 }
 
-func TestSplitDirectionWideCellFallback(t *testing.T) {
+func TestSplitDirectionPixelUnavailableFallback(t *testing.T) {
 	t.Setenv("WEZTERM_PANE", "0")
 	w := &WezTermSpawner{
 		runner: &mockRunner{
@@ -79,23 +79,8 @@ func TestSplitDirectionWideCellFallback(t *testing.T) {
 		},
 	}
 	dir, pct := w.splitDirection()
-	if dir != "--right" || pct != "50" {
-		t.Errorf("splitDirection() = %s %s, want --right 50", dir, pct)
-	}
-}
-
-func TestSplitDirectionTallCellFallback(t *testing.T) {
-	t.Setenv("WEZTERM_PANE", "0")
-	w := &WezTermSpawner{
-		runner: &mockRunner{
-			calls: []mockCall{
-				{out: []byte(`[{"pane_id":0,"size":{"rows":80,"cols":60,"pixel_width":0,"pixel_height":0}}]`)},
-			},
-		},
-	}
-	dir, pct := w.splitDirection()
 	if dir != "--bottom" || pct != "80" {
-		t.Errorf("splitDirection() = %s %s, want --bottom 80", dir, pct)
+		t.Errorf("splitDirection() = %s %s, want --bottom 80 (safe default when pixels unavailable)", dir, pct)
 	}
 }
 

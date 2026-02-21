@@ -126,11 +126,9 @@ func (w *WezTermSpawner) splitDirection() (string, string) {
 		}
 		return "--bottom", "80"
 	}
-	// Fallback to cell-based heuristic if pixel dimensions unavailable.
-	// A terminal cell is ~1:2 (w:h), so cols*1 vs rows*2 approximates pixels.
-	if size.Cols > size.Rows*2 {
-		return "--right", "50"
-	}
+	// Pixel dimensions unavailable; fall back to safe default.
+	// Cell-based heuristics are unreliable because the cell aspect ratio
+	// varies by font (typically 1:2.3–2.5, not the 1:2 often assumed).
 	return "--bottom", "80"
 }
 
