@@ -42,6 +42,9 @@ ccplan review --output stdout plan.md
 | `--output` | Output method: `clipboard` (default), `stdout`, `file` |
 | `--output-path` | File path for `--output file` |
 | `--theme` | Color theme: `dark` (default), `light` |
+| `--track-viewed` | Persist viewed state to sidecar file (`.reviewed.json`) for change detection across sessions |
+
+When `--track-viewed` is enabled, ccplan saves which steps you've marked as viewed in a `<plan-file>.reviewed.json` sidecar file. On subsequent runs, viewed marks are restored automatically. If a step's content has changed, its viewed mark is cleared (detected via content hash). The hook automatically enables this flag.
 
 ### `ccplan locate`
 

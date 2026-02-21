@@ -30,7 +30,7 @@ func makePlanNoPreamble() *plan.Plan {
 
 func TestNewStepList(t *testing.T) {
 	t.Run("with preamble", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		if !sl.items[0].IsOverview {
 			t.Error("first item should be overview when preamble exists")
 		}
@@ -41,7 +41,7 @@ func TestNewStepList(t *testing.T) {
 	})
 
 	t.Run("without preamble", func(t *testing.T) {
-		sl := NewStepList(makePlanNoPreamble())
+		sl := NewStepList(makePlanNoPreamble(), nil)
 		if sl.items[0].IsOverview {
 			t.Error("first item should not be overview when no preamble")
 		}
@@ -52,7 +52,7 @@ func TestNewStepList(t *testing.T) {
 }
 
 func TestCursorUpDown(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 
 	// Initial cursor at 0 (overview)
 	if sl.cursor != 0 {
@@ -93,7 +93,7 @@ func TestCursorUpDown(t *testing.T) {
 }
 
 func TestCursorUpDownSkipsHidden(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 
 	// Collapse S1 to hide children
 	sl.CursorDown() // move to S1
@@ -114,7 +114,7 @@ func TestCursorUpDownSkipsHidden(t *testing.T) {
 }
 
 func TestCursorTopBottom(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 
 	sl.CursorBottom()
 	if sl.items[sl.cursor].Step.ID != "S2" {
@@ -129,7 +129,7 @@ func TestCursorTopBottom(t *testing.T) {
 
 func TestToggleExpand(t *testing.T) {
 	t.Run("toggle with children", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.CursorDown() // S1
 
 		if !sl.items[sl.cursor].Expanded {
@@ -155,7 +155,7 @@ func TestToggleExpand(t *testing.T) {
 	})
 
 	t.Run("toggle without children", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.CursorBottom() // S2 (no children)
 		expanded := sl.items[sl.cursor].Expanded
 		sl.ToggleExpand() // should be no-op for leaf node
@@ -165,7 +165,7 @@ func TestToggleExpand(t *testing.T) {
 	})
 
 	t.Run("toggle overview", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		// cursor at overview
 		if !sl.IsOverviewSelected() {
 			t.Fatal("cursor should be on overview")
@@ -179,7 +179,7 @@ func TestToggleExpand(t *testing.T) {
 
 func TestExpandCollapse(t *testing.T) {
 	t.Run("expand already expanded", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.CursorDown() // S1, already expanded
 		sl.Expand()     // no-op
 		if !sl.items[sl.cursor].Expanded {
@@ -188,7 +188,7 @@ func TestExpandCollapse(t *testing.T) {
 	})
 
 	t.Run("expand collapsed", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.CursorDown() // S1
 		sl.ToggleExpand()
 		if sl.items[sl.cursor].Expanded {
@@ -201,7 +201,7 @@ func TestExpandCollapse(t *testing.T) {
 	})
 
 	t.Run("collapse expanded", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.CursorDown() // S1
 		sl.Collapse()
 		if sl.items[sl.cursor].Expanded {
@@ -210,7 +210,7 @@ func TestExpandCollapse(t *testing.T) {
 	})
 
 	t.Run("collapse moves to parent", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		// Move to S1.1
 		sl.CursorDown() // S1
 		sl.CursorDown() // S1.1
@@ -224,7 +224,7 @@ func TestExpandCollapse(t *testing.T) {
 	})
 
 	t.Run("collapse overview is no-op", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		cursorBefore := sl.cursor
 		sl.Collapse() // cursor at overview, should be no-op
 		if sl.cursor != cursorBefore {
@@ -233,7 +233,7 @@ func TestExpandCollapse(t *testing.T) {
 	})
 
 	t.Run("expand no children is no-op", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.CursorBottom() // S2 (no children)
 		expanded := sl.items[sl.cursor].Expanded
 		sl.Expand() // no-op
@@ -244,7 +244,7 @@ func TestExpandCollapse(t *testing.T) {
 }
 
 func TestAddComment(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 
 	// Normal add
 	c := &plan.ReviewComment{StepID: "S1", Action: plan.ActionSuggestion, Body: "test"}
@@ -274,7 +274,7 @@ func TestAddComment(t *testing.T) {
 }
 
 func TestUpdateComment(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 	c := &plan.ReviewComment{StepID: "S1", Action: plan.ActionSuggestion, Body: "original"}
 	sl.AddComment("S1", c)
 
@@ -299,7 +299,7 @@ func TestUpdateComment(t *testing.T) {
 }
 
 func TestDeleteComment(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 	sl.AddComment("S1", &plan.ReviewComment{Body: "a"})
 	sl.AddComment("S1", &plan.ReviewComment{Body: "b"})
 
@@ -326,7 +326,7 @@ func TestDeleteComment(t *testing.T) {
 }
 
 func TestToggleViewed(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 
 	if sl.IsViewed("S1") {
 		t.Error("S1 should not be viewed initially")
@@ -344,7 +344,7 @@ func TestToggleViewed(t *testing.T) {
 }
 
 func TestHasComments(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 
 	if sl.HasComments() {
 		t.Error("should have no comments initially")
@@ -362,7 +362,7 @@ func TestHasComments(t *testing.T) {
 }
 
 func TestBuildReviewResult(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 	sl.AddComment("S2", &plan.ReviewComment{StepID: "S2", Body: "s2 comment"})
 	sl.AddComment("S1", &plan.ReviewComment{StepID: "S1", Body: "s1 comment"})
 	sl.AddComment("S1", &plan.ReviewComment{StepID: "S1", Body: "s1 second"})
@@ -385,7 +385,7 @@ func TestBuildReviewResult(t *testing.T) {
 
 func TestFilterByQuery(t *testing.T) {
 	t.Run("partial match", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.FilterByQuery("Sub")
 		// S1.1 and S1.2 match, S1 is ancestor
 		for _, item := range sl.items {
@@ -399,7 +399,7 @@ func TestFilterByQuery(t *testing.T) {
 	})
 
 	t.Run("case insensitive", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.FilterByQuery("step 2")
 		for _, item := range sl.items {
 			if item.Step != nil && item.Step.ID == "S2" && !item.Visible {
@@ -409,7 +409,7 @@ func TestFilterByQuery(t *testing.T) {
 	})
 
 	t.Run("shows descendants", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.FilterByQuery("Step 1")
 		// S1 matches, children should be visible
 		for _, item := range sl.items {
@@ -420,7 +420,7 @@ func TestFilterByQuery(t *testing.T) {
 	})
 
 	t.Run("overview match", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.FilterByQuery("over")
 		if !sl.items[0].Visible {
 			t.Error("overview should match 'over'")
@@ -428,7 +428,7 @@ func TestFilterByQuery(t *testing.T) {
 	})
 
 	t.Run("empty query clears filter", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.FilterByQuery("nonexistent")
 		sl.FilterByQuery("")
 		for _, item := range sl.items {
@@ -439,7 +439,7 @@ func TestFilterByQuery(t *testing.T) {
 	})
 
 	t.Run("cursor moves to visible on hidden", func(t *testing.T) {
-		sl := NewStepList(makePlanWithChildren())
+		sl := NewStepList(makePlanWithChildren(), nil)
 		sl.CursorBottom() // S2
 		sl.FilterByQuery("Sub")
 		// S2 is hidden, cursor should move to a visible item
@@ -450,7 +450,7 @@ func TestFilterByQuery(t *testing.T) {
 }
 
 func TestClearFilter(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 	sl.FilterByQuery("nonexistent")
 	sl.ClearFilter()
 	for _, item := range sl.items {
@@ -461,7 +461,7 @@ func TestClearFilter(t *testing.T) {
 }
 
 func TestSelectedAndIsOverviewSelected(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 
 	// At overview
 	if !sl.IsOverviewSelected() {
@@ -481,7 +481,7 @@ func TestSelectedAndIsOverviewSelected(t *testing.T) {
 }
 
 func TestRender(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 	styles := DefaultStyles()
 	output := sl.Render(80, 20, styles)
 
@@ -498,7 +498,7 @@ func TestRender(t *testing.T) {
 }
 
 func TestRenderBadge(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 	styles := DefaultStyles()
 
 	// No badge
@@ -544,7 +544,7 @@ func TestTruncateMaxWidthThree(t *testing.T) {
 }
 
 func TestRenderCollapsedStep(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 	styles := DefaultStyles()
 
 	// Collapse S1 to get ▶ prefix rendered
@@ -568,7 +568,7 @@ func TestRenderCollapsedStep(t *testing.T) {
 }
 
 func TestSelectedOutOfBounds(t *testing.T) {
-	sl := NewStepList(&plan.Plan{})
+	sl := NewStepList(&plan.Plan{}, nil)
 	// Empty plan, no items - cursor is already out of range
 	sl.cursor = 999
 	if sl.Selected() != nil {
@@ -580,7 +580,7 @@ func TestSelectedOutOfBounds(t *testing.T) {
 }
 
 func TestToggleExpandOutOfBounds(t *testing.T) {
-	sl := NewStepList(&plan.Plan{})
+	sl := NewStepList(&plan.Plan{}, nil)
 	sl.cursor = 999
 
 	sl.ToggleExpand()
@@ -600,7 +600,7 @@ func TestToggleExpandOutOfBounds(t *testing.T) {
 }
 
 func TestGetComments(t *testing.T) {
-	sl := NewStepList(makePlanWithChildren())
+	sl := NewStepList(makePlanWithChildren(), nil)
 
 	// No comments
 	comments := sl.GetComments("S1")
@@ -613,5 +613,92 @@ func TestGetComments(t *testing.T) {
 	comments = sl.GetComments("S1")
 	if len(comments) != 1 {
 		t.Errorf("expected 1 comment, got %d", len(comments))
+	}
+}
+
+func TestViewedStateRestoration(t *testing.T) {
+	p := makePlanWithChildren()
+	state := plan.NewViewedState()
+	// Mark S1 as viewed with its current content
+	for _, s := range p.AllSteps() {
+		if s.ID == "S1" {
+			state.MarkViewed(s)
+		}
+	}
+
+	sl := NewStepList(p, state)
+
+	if !sl.IsViewed("S1") {
+		t.Error("S1 should be restored as viewed")
+	}
+	if sl.IsViewed("S2") {
+		t.Error("S2 should not be viewed")
+	}
+}
+
+func TestViewedStateStaleHash(t *testing.T) {
+	p := makePlanWithChildren()
+	state := plan.NewViewedState()
+
+	// Mark S1 as viewed
+	s1 := p.FindStep("S1")
+	if s1 == nil {
+		t.Fatal("S1 not found in plan")
+	}
+	state.MarkViewed(s1)
+
+	// Change S1's body before creating StepList
+	s1.Body = "changed body content"
+
+	sl := NewStepList(p, state)
+
+	if sl.IsViewed("S1") {
+		t.Error("S1 should not be viewed after content change (stale hash)")
+	}
+}
+
+func TestToggleViewedSyncsState(t *testing.T) {
+	p := makePlanWithChildren()
+	state := plan.NewViewedState()
+	sl := NewStepList(p, state)
+
+	s1 := p.FindStep("S1")
+	if s1 == nil {
+		t.Fatal("S1 not found in plan")
+	}
+
+	// Toggle on
+	sl.ToggleViewed("S1")
+	if !state.IsStepViewed(s1) {
+		t.Error("ViewedState should be updated after ToggleViewed on")
+	}
+
+	// Toggle off
+	sl.ToggleViewed("S1")
+	if state.IsStepViewed(s1) {
+		t.Error("ViewedState should be updated after ToggleViewed off")
+	}
+}
+
+func TestViewedStateGetter(t *testing.T) {
+	state := plan.NewViewedState()
+	sl := NewStepList(makePlanWithChildren(), state)
+
+	if sl.ViewedState() != state {
+		t.Error("ViewedState() should return the same state pointer")
+	}
+}
+
+func TestViewedStateNil(t *testing.T) {
+	sl := NewStepList(makePlanWithChildren(), nil)
+
+	// ToggleViewed should not panic with nil state
+	sl.ToggleViewed("S1")
+	if !sl.IsViewed("S1") {
+		t.Error("S1 should be viewed after toggle even with nil state")
+	}
+
+	if sl.ViewedState() != nil {
+		t.Error("ViewedState() should return nil when no state provided")
 	}
 }

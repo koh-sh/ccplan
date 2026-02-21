@@ -62,8 +62,9 @@ func (r *ReviewCmd) Run() error {
 
 	// Create and run TUI
 	app := tui.NewApp(p, tui.AppOptions{
-		Theme:    r.Theme,
-		FilePath: r.PlanFile,
+		Theme:       r.Theme,
+		FilePath:    r.PlanFile,
+		TrackViewed: r.TrackViewed,
 	})
 	prog := tea.NewProgram(app, tea.WithAltScreen())
 	finalModel, err := prog.Run()
@@ -75,6 +76,17 @@ func (r *ReviewCmd) Run() error {
 	if !ok {
 		return fmt.Errorf("unexpected model type: %T", finalModel)
 	}
+
+	// Save viewed state if tracking is enabled
+	if r.TrackViewed {
+		if vs := app.ViewedState(); vs != nil {
+			statePath := plan.StatePath(r.PlanFile)
+			if err := plan.SaveViewedState(statePath, vs); err != nil {
+				fmt.Fprintf(os.Stderr, "ccplan: warning: failed to save viewed state: %v\n", err)
+			}
+		}
+	}
+
 	result := app.Result()
 
 	// Output review if submitted

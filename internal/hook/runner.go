@@ -67,6 +67,7 @@ func Run(input *Input, cfg RunConfig) (int, error) {
 		"--output", "file",
 		"--output-path", reviewPath,
 		"--theme", cfg.Theme,
+		"--track-viewed",
 		planFile,
 	}
 

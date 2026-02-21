@@ -25,15 +25,17 @@ type StepList struct {
 	scrollOffset int
 	comments     map[string][]*plan.ReviewComment // stepID -> comments
 	viewed       map[string]bool                  // stepID -> viewed flag
+	viewedState  *plan.ViewedState
 	plan         *plan.Plan
 }
 
 // NewStepList creates a new StepList from a parsed plan.
-func NewStepList(p *plan.Plan) *StepList {
+func NewStepList(p *plan.Plan, state *plan.ViewedState) *StepList {
 	sl := &StepList{
-		comments: make(map[string][]*plan.ReviewComment),
-		viewed:   make(map[string]bool),
-		plan:     p,
+		comments:    make(map[string][]*plan.ReviewComment),
+		viewed:      make(map[string]bool),
+		viewedState: state,
+		plan:        p,
 	}
 
 	// Add overview entry if there's a preamble
@@ -58,6 +60,15 @@ func NewStepList(p *plan.Plan) *StepList {
 		}
 	}
 	flatten(p.Steps, 0)
+
+	// Restore viewed flags from persisted state
+	if state != nil {
+		for i, item := range sl.items {
+			if item.Step != nil && state.IsStepViewed(item.Step) {
+				sl.viewed[sl.items[i].Step.ID] = true
+			}
+		}
+	}
 
 	return sl
 }
@@ -241,6 +252,22 @@ func (sl *StepList) DeleteComment(stepID string, index int) {
 // ToggleViewed toggles the viewed flag for a step.
 func (sl *StepList) ToggleViewed(stepID string) {
 	sl.viewed[stepID] = !sl.viewed[stepID]
+
+	// Sync with persisted state
+	if sl.viewedState != nil {
+		if step := sl.plan.FindStep(stepID); step != nil {
+			if sl.viewed[stepID] {
+				sl.viewedState.MarkViewed(step)
+			} else {
+				sl.viewedState.UnmarkViewed(step)
+			}
+		}
+	}
+}
+
+// ViewedState returns the underlying ViewedState for persistence.
+func (sl *StepList) ViewedState() *plan.ViewedState {
+	return sl.viewedState
 }
 
 // IsViewed returns whether a step is marked as viewed.

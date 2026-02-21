@@ -22,10 +22,11 @@ type HookCmd struct {
 
 // ReviewCmd is the review subcommand.
 type ReviewCmd struct {
-	PlanFile   string `arg:"" help:"Path to the Markdown plan file"`
-	Output     string `enum:"clipboard,stdout,file" default:"clipboard" help:"Output method (clipboard|stdout|file)"`
-	OutputPath string `help:"File path for file output" type:"path"`
-	Theme      string `enum:"dark,light" default:"dark" help:"Color theme (dark|light)"`
+	PlanFile    string `arg:"" help:"Path to the Markdown plan file"`
+	Output      string `enum:"clipboard,stdout,file" default:"clipboard" help:"Output method (clipboard|stdout|file)"`
+	OutputPath  string `help:"File path for file output" type:"path"`
+	Theme       string `enum:"dark,light" default:"dark" help:"Color theme (dark|light)"`
+	TrackViewed bool   `help:"Persist viewed state to sidecar file for change detection across sessions"`
 }
 
 // LocateCmd is the locate subcommand.

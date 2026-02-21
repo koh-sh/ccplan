@@ -64,15 +64,20 @@ type App struct {
 
 // AppOptions configures the TUI appearance.
 type AppOptions struct {
-	Theme    string // "dark" or "light"
-	FilePath string // plan file path (displayed in title bar)
+	Theme       string // "dark" or "light"
+	FilePath    string // plan file path (displayed in title bar)
+	TrackViewed bool   // persist viewed state to sidecar file
 }
 
 // NewApp creates a new App model.
 func NewApp(p *plan.Plan, opts AppOptions) *App {
+	var state *plan.ViewedState
+	if opts.TrackViewed && opts.FilePath != "" {
+		state = plan.LoadViewedState(plan.StatePath(opts.FilePath))
+	}
 	return &App{
 		plan:           p,
-		stepList:       NewStepList(p),
+		stepList:       NewStepList(p, state),
 		comment:        NewCommentEditor(),
 		commentList:    NewCommentList(),
 		search:         NewSearchBar(),
@@ -89,6 +94,11 @@ func NewApp(p *plan.Plan, opts AppOptions) *App {
 // Result returns the final result after the TUI exits.
 func (a *App) Result() AppResult {
 	return a.result
+}
+
+// ViewedState returns the current viewed state for persistence.
+func (a *App) ViewedState() *plan.ViewedState {
+	return a.stepList.ViewedState()
 }
 
 // Init implements tea.Model.
