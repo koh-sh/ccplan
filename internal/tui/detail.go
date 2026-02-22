@@ -123,6 +123,7 @@ func (d *DetailPane) ShowOverview(p *plan.Plan) {
 // renderContent renders Markdown content into the viewport.
 func (d *DetailPane) renderContent(md string) {
 	wrapWidth := d.width - glamourHorizontalOverhead
+	md = renderMermaidBlocks(md)
 	md = wrapProse(md, wrapWidth)
 	rendered := md
 	if d.renderer != nil {
