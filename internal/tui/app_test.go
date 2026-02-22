@@ -887,6 +887,225 @@ func TestViewNotReady(t *testing.T) {
 	}
 }
 
+func TestFullViewToggle(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	if a.fullView {
+		t.Fatal("fullView should be false initially")
+	}
+
+	a.Update(keyMsg("f"))
+	if !a.fullView {
+		t.Error("fullView should be true after f")
+	}
+
+	a.Update(keyMsg("f"))
+	if a.fullView {
+		t.Error("fullView should be false after second f")
+	}
+}
+
+func TestFullViewFromRightPane(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(tea.KeyMsg{Type: tea.KeyTab}) // switch to right pane
+	if a.focus != FocusRight {
+		t.Fatal("focus should be right")
+	}
+
+	a.Update(keyMsg("f"))
+	if !a.fullView {
+		t.Error("f should toggle fullView even from right pane")
+	}
+}
+
+func TestFullViewCursorMoveKeepsScroll(t *testing.T) {
+	a := initApp(t, makeLargePlan(5, 2))
+
+	// Enter full view and scroll down in the detail pane
+	a.Update(keyMsg("f"))
+	if !a.fullView {
+		t.Fatal("should be in full view")
+	}
+
+	// Scroll detail pane down
+	a.detail.Viewport().ScrollDown(5)
+	yBefore := a.detail.Viewport().YOffset
+
+	// Move cursor in left pane (j/k)
+	a.Update(keyMsg("j"))
+	yAfter := a.detail.Viewport().YOffset
+	if yAfter != yBefore {
+		t.Errorf("cursor move should not change YOffset in full view: before=%d, after=%d", yBefore, yAfter)
+	}
+
+	a.Update(keyMsg("k"))
+	yAfterK := a.detail.Viewport().YOffset
+	if yAfterK != yBefore {
+		t.Errorf("cursor k should not change YOffset in full view: before=%d, after=%d", yBefore, yAfterK)
+	}
+}
+
+func TestFullViewGGKeepsScroll(t *testing.T) {
+	a := initApp(t, makeLargePlan(5, 0))
+
+	a.Update(keyMsg("f"))
+	a.Update(keyMsg("j")) // move down first (before fullView scroll effect is set up)
+
+	// Scroll detail pane down
+	a.detail.Viewport().ScrollDown(3)
+	yBefore := a.detail.Viewport().YOffset
+
+	// gg (left pane focused)
+	a.Update(keyMsg("g"))
+	a.Update(keyMsg("g"))
+	yAfter := a.detail.Viewport().YOffset
+	if yAfter != yBefore {
+		t.Errorf("gg should not change YOffset in full view: before=%d, after=%d", yBefore, yAfter)
+	}
+}
+
+func TestFullViewGKeepsScroll(t *testing.T) {
+	a := initApp(t, makeLargePlan(5, 0))
+
+	a.Update(keyMsg("f"))
+
+	// Scroll detail pane down
+	a.detail.Viewport().ScrollDown(3)
+	yBefore := a.detail.Viewport().YOffset
+
+	// G (left pane focused)
+	a.Update(keyMsg("G"))
+	yAfter := a.detail.Viewport().YOffset
+	if yAfter != yBefore {
+		t.Errorf("G should not change YOffset in full view: before=%d, after=%d", yBefore, yAfter)
+	}
+}
+
+func TestFullViewCommentStillWorks(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("f"))
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("c"))
+	if a.mode != ModeComment {
+		t.Errorf("mode = %d, want ModeComment in full view", a.mode)
+	}
+}
+
+func TestFullViewCommentRefreshesView(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	a.Update(keyMsg("f"))
+	a.Update(keyMsg("j")) // S1
+	a.Update(keyMsg("c"))
+
+	a.comment.textarea.SetValue("full view comment")
+	a.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+
+	if a.mode != ModeNormal {
+		t.Errorf("mode = %d, want ModeNormal after save", a.mode)
+	}
+	// After saving comment in full view, the detail should be refreshed
+	content := a.detail.View()
+	if !strings.Contains(content, "full") {
+		t.Error("full view should re-render and show saved comment")
+	}
+}
+
+func TestFullViewStatusBar(t *testing.T) {
+	a := initApp(t, makeLargePlan(3, 0))
+
+	// Default (section view): pressing f will switch to full
+	sb := a.renderStatusBar()
+	if !strings.Contains(sb, "full") {
+		t.Error("status bar should show 'full' when in section view (target mode)")
+	}
+
+	// After toggle (full view): pressing f will switch to section
+	a.Update(keyMsg("f"))
+	sb = a.renderStatusBar()
+	if !strings.Contains(sb, "section") {
+		t.Error("status bar should show 'section' when in full view (target mode)")
+	}
+}
+
+func TestFullViewScrollSyncsCursor(t *testing.T) {
+	// Use many steps so content exceeds viewport height
+	p := makeLargePlan(20, 0)
+	app := NewApp(p, AppOptions{})
+	// Use small height so scrolling is meaningful
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 15})
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
+
+	a.Update(keyMsg("f")) // enter full view
+	if !a.fullView {
+		t.Fatal("should be in full view")
+	}
+
+	// Verify sectionOffsets were built
+	if len(a.detail.sectionOffsets) == 0 {
+		t.Fatal("sectionOffsets should be populated in full view")
+	}
+
+	// Switch to right pane
+	a.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if a.focus != FocusRight {
+		t.Fatal("focus should be right")
+	}
+
+	// Go to bottom with G
+	a.Update(keyMsg("G"))
+
+	// Cursor should have moved to a step near the bottom (not overview/top)
+	selected := a.stepList.Selected()
+	if selected == nil {
+		t.Fatal("expected a selected step after G")
+	}
+	// YOffset points to the top of the visible window, so the synced step
+	// is the one at the top of the last visible page (near end, not necessarily the very last)
+	if selected.ID != "S19" && selected.ID != "S20" {
+		t.Errorf("after G in full view right pane, cursor should sync near last step, got %s", selected.ID)
+	}
+}
+
+func TestFullViewScrollSyncsCursorGG(t *testing.T) {
+	p := makeLargePlan(20, 0)
+	app := NewApp(p, AppOptions{})
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 15})
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
+
+	a.Update(keyMsg("f")) // enter full view
+
+	// Switch to right pane
+	a.Update(tea.KeyMsg{Type: tea.KeyTab})
+
+	// Go to bottom first, then gg to go back to top
+	a.Update(keyMsg("G"))
+	// Verify we moved away from top
+	selected := a.stepList.Selected()
+	if selected != nil && selected.ID == "S1" {
+		t.Fatal("after G, should not be at S1")
+	}
+
+	a.Update(keyMsg("g"))
+	a.Update(keyMsg("g"))
+
+	// After gg, YOffset is 0, which is before any step heading
+	// so stepID is "" and cursor stays where it was — but that's fine
+	// since overview is at the top. The key point is no crash and
+	// cursor is near the top.
+	if a.detail.Viewport().YOffset != 0 {
+		t.Errorf("after gg, viewport should be at top, YOffset=%d", a.detail.Viewport().YOffset)
+	}
+}
+
 func TestSinglePaneMode(t *testing.T) {
 	app := NewApp(makeLargePlan(3, 0), AppOptions{})
 

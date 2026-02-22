@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -16,13 +17,19 @@ import (
 // margin (2 each) and padding (2 each) = 8 total.
 const glamourHorizontalOverhead = 8
 
+type sectionOffset struct {
+	line   int
+	stepID string
+}
+
 // DetailPane manages the right pane that shows step details.
 type DetailPane struct {
-	viewport viewport.Model
-	renderer *glamour.TermRenderer
-	width    int
-	height   int
-	theme    string
+	viewport       viewport.Model
+	renderer       *glamour.TermRenderer
+	width          int
+	height         int
+	theme          string
+	sectionOffsets []sectionOffset
 }
 
 // customStyle returns a glamour style with red background removed from
@@ -83,6 +90,7 @@ func (d *DetailPane) SetSize(width, height int) {
 
 // ShowStep renders and displays a step's content.
 func (d *DetailPane) ShowStep(step *plan.Step, comments []*plan.ReviewComment) {
+	d.sectionOffsets = nil
 	var content strings.Builder
 
 	fmt.Fprintf(&content, "## %s: %s\n\n", step.ID, step.Title)
@@ -108,6 +116,7 @@ func (d *DetailPane) ShowStep(step *plan.Step, comments []*plan.ReviewComment) {
 
 // ShowOverview renders and displays the plan overview (preamble).
 func (d *DetailPane) ShowOverview(p *plan.Plan) {
+	d.sectionOffsets = nil
 	var content strings.Builder
 
 	if p.Title != "" {
@@ -120,8 +129,51 @@ func (d *DetailPane) ShowOverview(p *plan.Plan) {
 	d.renderContent(content.String())
 }
 
-// renderContent renders Markdown content into the viewport.
-func (d *DetailPane) renderContent(md string) {
+// ShowAll renders the entire plan in a single view.
+func (d *DetailPane) ShowAll(p *plan.Plan, getComments func(string) []*plan.ReviewComment) {
+	var content strings.Builder
+
+	if p.Title != "" {
+		fmt.Fprintf(&content, "# %s\n\n", p.Title)
+	}
+	if p.Preamble != "" {
+		content.WriteString(p.Preamble + "\n")
+	}
+
+	var walkSteps func(steps []*plan.Step)
+	walkSteps = func(steps []*plan.Step) {
+		for _, step := range steps {
+			content.WriteString("\n")
+			heading := strings.Repeat("#", step.Level)
+			fmt.Fprintf(&content, "%s %s: %s\n\n", heading, step.ID, step.Title)
+			if step.Body != "" {
+				content.WriteString(step.Body + "\n")
+			}
+
+			for i, comment := range getComments(step.ID) {
+				content.WriteString("\n---\n\n")
+				comments := getComments(step.ID)
+				if len(comments) == 1 {
+					fmt.Fprintf(&content, "**Review Comment** [%s]\n\n", comment.Action)
+				} else {
+					fmt.Fprintf(&content, "**Review Comment #%d** [%s]\n\n", i+1, comment.Action)
+				}
+				if comment.Body != "" {
+					content.WriteString(comment.Body + "\n")
+				}
+			}
+
+			walkSteps(step.Children)
+		}
+	}
+	walkSteps(p.Steps)
+
+	rendered := d.renderContent(content.String())
+	d.buildSectionOffsets(rendered)
+}
+
+// renderContent renders Markdown content into the viewport and returns the rendered string.
+func (d *DetailPane) renderContent(md string) string {
 	wrapWidth := d.width - glamourHorizontalOverhead
 	md = renderMermaidBlocks(md)
 	md = wrapProse(md, wrapWidth)
@@ -134,6 +186,7 @@ func (d *DetailPane) renderContent(md string) {
 	d.viewport.SetContent(rendered)
 	d.viewport.SetXOffset(0)
 	d.viewport.GotoTop()
+	return rendered
 }
 
 // wrapProse wraps prose lines in Markdown to the given width using Markdown
@@ -259,4 +312,32 @@ func (d *DetailPane) View() string {
 // Viewport returns a pointer to the viewport for event handling.
 func (d *DetailPane) Viewport() *viewport.Model {
 	return &d.viewport
+}
+
+var (
+	ansiRe        = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	stepHeadingRe = regexp.MustCompile(`^(?:#{1,6}\s+)?(S\d+(?:\.\d+)*):\s`)
+)
+
+func (d *DetailPane) buildSectionOffsets(rendered string) {
+	d.sectionOffsets = nil
+	for i, line := range strings.Split(rendered, "\n") {
+		stripped := strings.TrimSpace(ansiRe.ReplaceAllString(line, ""))
+		if m := stepHeadingRe.FindStringSubmatch(stripped); m != nil {
+			d.sectionOffsets = append(d.sectionOffsets, sectionOffset{line: i, stepID: m[1]})
+		}
+	}
+}
+
+// StepIDAtOffset returns the step ID visible at the given vertical offset.
+func (d *DetailPane) StepIDAtOffset(yOffset int) string {
+	result := ""
+	for _, so := range d.sectionOffsets {
+		if so.line <= yOffset {
+			result = so.stepID
+		} else {
+			break
+		}
+	}
+	return result
 }

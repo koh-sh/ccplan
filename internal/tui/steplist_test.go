@@ -755,6 +755,37 @@ func TestViewedStateGetter(t *testing.T) {
 	}
 }
 
+func TestSelectByStepID(t *testing.T) {
+	sl := NewStepList(makePlanWithChildren(), nil)
+
+	// Move to S2
+	sl.SelectByStepID("S2")
+	if sl.Selected() == nil || sl.Selected().ID != "S2" {
+		t.Errorf("cursor should be on S2, got %v", sl.Selected())
+	}
+
+	// Move to S1.1
+	sl.SelectByStepID("S1.1")
+	if sl.Selected() == nil || sl.Selected().ID != "S1.1" {
+		t.Errorf("cursor should be on S1.1, got %v", sl.Selected())
+	}
+
+	// Non-existent ID should not move cursor
+	sl.SelectByStepID("S99")
+	if sl.Selected() == nil || sl.Selected().ID != "S1.1" {
+		t.Errorf("cursor should remain on S1.1 for non-existent ID, got %v", sl.Selected())
+	}
+
+	// Hidden item should not be selected
+	sl.CursorDown() // move away from S1.1
+	sl.SelectByStepID("S1")
+	sl.ToggleExpand() // collapse S1, hiding S1.1 and S1.2
+	sl.SelectByStepID("S1.1")
+	if sl.Selected() != nil && sl.Selected().ID == "S1.1" {
+		t.Error("hidden S1.1 should not be selected")
+	}
+}
+
 func TestViewedStateNil(t *testing.T) {
 	sl := NewStepList(makePlanWithChildren(), nil)
 

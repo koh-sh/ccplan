@@ -20,6 +20,9 @@ type KeyMap struct {
 	Save        key.Binding
 	Cancel      key.Binding
 
+	// View mode
+	FullView key.Binding
+
 	// Right pane specific
 	ScrollToStart key.Binding
 	ScrollToEnd   key.Binding
@@ -95,6 +98,10 @@ func DefaultKeyMap() KeyMap {
 		Cancel: key.NewBinding(
 			key.WithKeys("esc"),
 			key.WithHelp("esc", "cancel"),
+		),
+		FullView: key.NewBinding(
+			key.WithKeys("f"),
+			key.WithHelp("f", "full/section view"),
 		),
 		ScrollToStart: key.NewBinding(
 			key.WithKeys("H"),

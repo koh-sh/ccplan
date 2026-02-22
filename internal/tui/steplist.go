@@ -504,6 +504,16 @@ func (sl *StepList) FilterByQuery(query string) {
 	}
 }
 
+// SelectByStepID moves the cursor to the item with the given step ID.
+func (sl *StepList) SelectByStepID(stepID string) {
+	for i, item := range sl.items {
+		if item.Step != nil && item.Step.ID == stepID && item.Visible {
+			sl.cursor = i
+			return
+		}
+	}
+}
+
 // ClearFilter resets visibility to respect only expansion state.
 func (sl *StepList) ClearFilter() {
 	sl.updateVisibility()

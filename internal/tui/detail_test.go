@@ -251,6 +251,189 @@ func TestHardWrapCJK(t *testing.T) {
 	}
 }
 
+func TestDetailPaneShowAll(t *testing.T) {
+	dp := NewDetailPane(80, 80, "dark")
+	p := &plan.Plan{
+		Title:    "My Plan",
+		Preamble: "Unique preamble content",
+		Steps: []*plan.Step{
+			{ID: "S1", Title: "First Step", Level: 2, Body: "Alpha body text"},
+			{ID: "S2", Title: "Second Step", Level: 2, Body: "Bravo body text"},
+		},
+	}
+	getComments := func(string) []*plan.ReviewComment { return nil }
+
+	dp.ShowAll(p, getComments)
+	content := dp.View()
+	if !strings.Contains(content, "Unique") {
+		t.Errorf("view should contain preamble word, got:\n%s", content)
+	}
+	if !strings.Contains(content, "S1") {
+		t.Error("view should contain step S1")
+	}
+	if !strings.Contains(content, "Alpha") {
+		t.Error("view should contain first step body")
+	}
+	if !strings.Contains(content, "S2") {
+		t.Error("view should contain step S2")
+	}
+	if !strings.Contains(content, "Bravo") {
+		t.Error("view should contain second step body")
+	}
+}
+
+func TestDetailPaneShowAllWithComments(t *testing.T) {
+	dp := NewDetailPane(80, 80, "dark")
+	p := &plan.Plan{
+		Title: "Plan",
+		Steps: []*plan.Step{
+			{ID: "S1", Title: "Step One", Level: 2, Body: "Body"},
+		},
+	}
+	getComments := func(stepID string) []*plan.ReviewComment {
+		if stepID == "S1" {
+			return []*plan.ReviewComment{
+				{StepID: "S1", Action: plan.ActionSuggestion, Body: "Review feedback"},
+			}
+		}
+		return nil
+	}
+
+	dp.ShowAll(p, getComments)
+	content := dp.View()
+	if !strings.Contains(content, "Review") {
+		t.Error("view should contain review comment")
+	}
+}
+
+func TestDetailPaneShowAllNoPreamble(t *testing.T) {
+	dp := NewDetailPane(80, 80, "dark")
+	p := &plan.Plan{
+		Title: "NoPreamblePlan",
+		Steps: []*plan.Step{
+			{ID: "S1", Title: "Only Step", Level: 2, Body: "Unique nopreamble body"},
+		},
+	}
+	getComments := func(string) []*plan.ReviewComment { return nil }
+
+	dp.ShowAll(p, getComments)
+	content := dp.View()
+	if !strings.Contains(content, "Unique") {
+		t.Errorf("view should contain step body, got:\n%s", content)
+	}
+	if !strings.Contains(content, "S1") {
+		t.Error("view should contain step S1")
+	}
+}
+
+func TestBuildSectionOffsets(t *testing.T) {
+	dp := NewDetailPane(80, 80, "dark")
+	p := &plan.Plan{
+		Title:    "Test Plan",
+		Preamble: "Preamble text",
+		Steps: []*plan.Step{
+			{ID: "S1", Title: "First", Level: 2, Body: "Body 1"},
+			{ID: "S2", Title: "Second", Level: 2, Body: "Body 2"},
+		},
+	}
+	getComments := func(string) []*plan.ReviewComment { return nil }
+
+	dp.ShowAll(p, getComments)
+
+	if len(dp.sectionOffsets) != 2 {
+		t.Fatalf("sectionOffsets count = %d, want 2", len(dp.sectionOffsets))
+	}
+	if dp.sectionOffsets[0].stepID != "S1" {
+		t.Errorf("first offset stepID = %s, want S1", dp.sectionOffsets[0].stepID)
+	}
+	if dp.sectionOffsets[1].stepID != "S2" {
+		t.Errorf("second offset stepID = %s, want S2", dp.sectionOffsets[1].stepID)
+	}
+	if dp.sectionOffsets[0].line >= dp.sectionOffsets[1].line {
+		t.Errorf("S1 line (%d) should be before S2 line (%d)", dp.sectionOffsets[0].line, dp.sectionOffsets[1].line)
+	}
+}
+
+func TestBuildSectionOffsetsWithChildren(t *testing.T) {
+	dp := NewDetailPane(80, 80, "dark")
+	s1 := &plan.Step{ID: "S1", Title: "Parent", Level: 2, Body: "Body"}
+	s1_1 := &plan.Step{ID: "S1.1", Title: "Child", Level: 3, Body: "Child body", Parent: s1}
+	s1.Children = []*plan.Step{s1_1}
+	p := &plan.Plan{
+		Title: "Plan",
+		Steps: []*plan.Step{s1},
+	}
+	getComments := func(string) []*plan.ReviewComment { return nil }
+
+	dp.ShowAll(p, getComments)
+
+	if len(dp.sectionOffsets) != 2 {
+		t.Fatalf("sectionOffsets count = %d, want 2", len(dp.sectionOffsets))
+	}
+	if dp.sectionOffsets[0].stepID != "S1" {
+		t.Errorf("first offset stepID = %s, want S1", dp.sectionOffsets[0].stepID)
+	}
+	if dp.sectionOffsets[1].stepID != "S1.1" {
+		t.Errorf("second offset stepID = %s, want S1.1", dp.sectionOffsets[1].stepID)
+	}
+}
+
+func TestStepIDAtOffset(t *testing.T) {
+	dp := NewDetailPane(80, 80, "dark")
+	dp.sectionOffsets = []sectionOffset{
+		{line: 5, stepID: "S1"},
+		{line: 20, stepID: "S2"},
+		{line: 40, stepID: "S3"},
+	}
+
+	tests := []struct {
+		name    string
+		yOffset int
+		want    string
+	}{
+		{"before any section", 0, ""},
+		{"at first section", 5, "S1"},
+		{"between S1 and S2", 15, "S1"},
+		{"at S2", 20, "S2"},
+		{"between S2 and S3", 30, "S2"},
+		{"at S3", 40, "S3"},
+		{"past S3", 100, "S3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := dp.StepIDAtOffset(tt.yOffset)
+			if got != tt.want {
+				t.Errorf("StepIDAtOffset(%d) = %q, want %q", tt.yOffset, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestShowStepClearsSectionOffsets(t *testing.T) {
+	dp := NewDetailPane(80, 40, "dark")
+	dp.sectionOffsets = []sectionOffset{{line: 0, stepID: "S1"}}
+
+	step := &plan.Step{ID: "S1", Title: "Test", Body: "Body"}
+	dp.ShowStep(step, nil)
+
+	if dp.sectionOffsets != nil {
+		t.Error("ShowStep should clear sectionOffsets")
+	}
+}
+
+func TestShowOverviewClearsSectionOffsets(t *testing.T) {
+	dp := NewDetailPane(80, 40, "dark")
+	dp.sectionOffsets = []sectionOffset{{line: 0, stepID: "S1"}}
+
+	p := &plan.Plan{Title: "Plan", Preamble: "Text"}
+	dp.ShowOverview(p)
+
+	if dp.sectionOffsets != nil {
+		t.Error("ShowOverview should clear sectionOffsets")
+	}
+}
+
 func TestCustomStyle(t *testing.T) {
 	dark := customStyle("dark")
 	light := customStyle("light")

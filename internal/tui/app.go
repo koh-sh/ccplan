@@ -52,6 +52,7 @@ type App struct {
 
 	mode      AppMode
 	focus     Focus
+	fullView  bool
 	width     int
 	height    int
 	ready     bool
@@ -161,9 +162,12 @@ func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if msg.String() == "g" {
 			if a.focus == FocusLeft {
 				a.stepList.CursorTop()
-				a.refreshDetail()
+				if !a.fullView {
+					a.refreshDetail()
+				}
 			} else {
 				a.detail.Viewport().GotoTop()
+				a.syncCursorToScroll()
 			}
 			return a, nil
 		}
@@ -178,9 +182,12 @@ func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "G":
 		if a.focus == FocusLeft {
 			a.stepList.CursorBottom()
-			a.refreshDetail()
+			if !a.fullView {
+				a.refreshDetail()
+			}
 		} else {
 			a.detail.Viewport().GotoBottom()
+			a.syncCursorToScroll()
 		}
 		return a, nil
 	}
@@ -216,6 +223,11 @@ func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keymap.PaneShrink):
 		a.resizeLeftPane(-5)
 		return a, nil
+
+	case key.Matches(msg, a.keymap.FullView):
+		a.fullView = !a.fullView
+		a.refreshDetail()
+		return a, nil
 	}
 
 	if a.focus == FocusLeft {
@@ -228,11 +240,15 @@ func (a *App) handleLeftPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, a.keymap.Up):
 		a.stepList.CursorUp()
-		a.refreshDetail()
+		if !a.fullView {
+			a.refreshDetail()
+		}
 
 	case key.Matches(msg, a.keymap.Down):
 		a.stepList.CursorDown()
-		a.refreshDetail()
+		if !a.fullView {
+			a.refreshDetail()
+		}
 
 	case key.Matches(msg, a.keymap.Toggle):
 		a.stepList.ToggleExpand()
@@ -288,8 +304,10 @@ func (a *App) handleRightPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.detail.Viewport().SetXOffset(scrollToEnd)
 	case key.Matches(msg, a.keymap.Up):
 		a.detail.Viewport().ScrollUp(1)
+		a.syncCursorToScroll()
 	case key.Matches(msg, a.keymap.Down):
 		a.detail.Viewport().ScrollDown(1)
+		a.syncCursorToScroll()
 	case key.Matches(msg, a.keymap.Expand):
 		a.detail.Viewport().ScrollRight(4)
 	case key.Matches(msg, a.keymap.Collapse):
@@ -447,11 +465,15 @@ func (a *App) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, a.keymap.Up):
 		a.stepList.CursorUp()
-		a.refreshDetail()
+		if !a.fullView {
+			a.refreshDetail()
+		}
 		return a, nil
 	case key.Matches(msg, a.keymap.Down):
 		a.stepList.CursorDown()
-		a.refreshDetail()
+		if !a.fullView {
+			a.refreshDetail()
+		}
 		return a, nil
 	}
 
@@ -476,8 +498,24 @@ func (a *App) submitReview() (tea.Model, tea.Cmd) {
 	return a, tea.Quit
 }
 
+func (a *App) syncCursorToScroll() {
+	if !a.fullView || a.detail == nil {
+		return
+	}
+	stepID := a.detail.StepIDAtOffset(a.detail.Viewport().YOffset)
+	if stepID == "" {
+		return
+	}
+	a.stepList.SelectByStepID(stepID)
+}
+
 func (a *App) refreshDetail() {
 	if a.detail == nil {
+		return
+	}
+
+	if a.fullView {
+		a.detail.ShowAll(a.plan, a.stepList.GetComments)
 		return
 	}
 
@@ -681,6 +719,11 @@ func (a *App) renderStatusBar() string {
 		return a.search.View()
 	}
 
+	viewMode := "full"
+	if a.fullView {
+		viewMode = "section"
+	}
+
 	progress := fmt.Sprintf("[%d/%d viewed]", a.stepList.ViewedCount(), a.stepList.TotalStepCount())
 	if commentCount := a.stepList.TotalCommentCount(); commentCount > 0 {
 		progress += fmt.Sprintf(" [%d comments]", commentCount)
@@ -688,6 +731,7 @@ func (a *App) renderStatusBar() string {
 
 	return a.styles.StatusBar.Render(
 		a.statusEntry("enter", "toggle") + "  " +
+			a.statusEntry("f", viewMode) + "  " +
 			a.statusEntry("c", "comment") + "  " +
 			a.statusEntry("C", "comments") + "  " +
 			a.statusEntry("v", "viewed") + "  " +
@@ -734,6 +778,7 @@ func (a *App) renderHelp() string {
     gg              Go to top
     G               Go to bottom
     Enter           Toggle expand/collapse
+    f               Toggle full/section view
     h/l, Left/Right Scroll detail pane left/right
     H/L             Scroll detail to start/end
     >/<             Resize left pane
