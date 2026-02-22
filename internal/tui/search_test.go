@@ -4,29 +4,44 @@ import (
 	"testing"
 )
 
-func TestSearchBarOpenClose(t *testing.T) {
-	sb := NewSearchBar()
-
-	if sb.IsActive() {
-		t.Error("should not be active initially")
+func TestSearchBar(t *testing.T) {
+	tests := []struct {
+		name       string
+		setup      func(*SearchBar)
+		wantActive bool
+		wantQuery  string
+	}{
+		{
+			name:       "not active initially",
+			setup:      func(*SearchBar) {},
+			wantActive: false,
+		},
+		{
+			name:       "active after Open",
+			setup:      func(sb *SearchBar) { sb.Open() },
+			wantActive: true,
+			wantQuery:  "",
+		},
+		{
+			name:       "not active after Open then Close",
+			setup:      func(sb *SearchBar) { sb.Open(); sb.Close() },
+			wantActive: false,
+		},
 	}
 
-	sb.Open()
-	if !sb.IsActive() {
-		t.Error("should be active after Open")
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sb := NewSearchBar()
+			tt.setup(sb)
 
-	sb.Close()
-	if sb.IsActive() {
-		t.Error("should not be active after Close")
-	}
-}
-
-func TestSearchBarQuery(t *testing.T) {
-	sb := NewSearchBar()
-	sb.Open()
-
-	if sb.Query() != "" {
-		t.Errorf("query should be empty after Open, got %q", sb.Query())
+			if got := sb.IsActive(); got != tt.wantActive {
+				t.Errorf("IsActive() = %v, want %v", got, tt.wantActive)
+			}
+			if tt.wantActive {
+				if got := sb.Query(); got != tt.wantQuery {
+					t.Errorf("Query() = %q, want %q", got, tt.wantQuery)
+				}
+			}
+		})
 	}
 }

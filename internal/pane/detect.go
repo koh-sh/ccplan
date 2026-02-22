@@ -19,6 +19,7 @@ func ByName(name string) PaneSpawner {
 	case "wezterm":
 		return &WezTermSpawner{}
 	case "tmux":
+		// tmux support is not yet implemented; fall back to DirectSpawner.
 		return &DirectSpawner{}
 	case "auto", "":
 		return AutoDetect()

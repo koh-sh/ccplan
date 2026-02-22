@@ -16,6 +16,9 @@ func (h *HookCmd) Run() error {
 }
 
 // runExit executes the hook logic and returns the exit code.
+// Errors always return exit code 0 so that hook failures never block the
+// Claude Code workflow. Only a successful review submission returns exit
+// code 2 (feedback signal).
 func (h *HookCmd) runExit(r io.Reader) int {
 	input, err := hook.ParseInput(r)
 	if err != nil {

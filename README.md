@@ -55,6 +55,9 @@ ccplan locate --transcript ~/.claude/projects/.../session.jsonl
 
 # List all plan files found in a transcript
 ccplan locate --transcript session.jsonl --all
+
+# Read hook JSON input from stdin to resolve the plan file
+ccplan locate --stdin
 ```
 
 ### `ccplan hook`
@@ -124,6 +127,7 @@ Set `PLAN_REVIEW_SKIP=1` to temporarily disable the hook.
 | `>` / `<` | Resize left pane wider / narrower |
 | `Enter` | Toggle expand/collapse |
 | `Tab` | Switch focus between panes |
+| `f` | Toggle full view / section view (right pane) |
 | `c` | Add comment |
 | `C` | Manage comments (edit/delete) |
 | `v` | Toggle viewed mark |
@@ -162,6 +166,10 @@ The status bar shows key hints and a progress indicator: `[X/Y viewed]` for step
 | `j` / `k` | Navigate results |
 | `Enter` | Confirm search |
 | `Esc` | Cancel search |
+
+## Mermaid Diagram Rendering
+
+Fenced `` ```mermaid `` code blocks in plan files are automatically converted to ASCII art in the detail pane. If rendering fails (e.g. unsupported diagram type), the original source is shown as-is.
 
 ## Review Output Format
 
