@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -44,8 +45,11 @@ func TestDetailPaneShowStepWithComments(t *testing.T) {
 
 	dp.ShowStep(step, comments)
 	content := dp.View()
-	if !strings.Contains(content, "Review") {
-		t.Error("view should contain 'Review'")
+	if !strings.Contains(content, "Review Comment") {
+		t.Error("view should contain 'Review Comment' box header")
+	}
+	if !strings.Contains(content, "Review text") {
+		t.Error("view should contain comment body")
 	}
 }
 
@@ -61,6 +65,9 @@ func TestDetailPaneShowStepWithMultipleComments(t *testing.T) {
 	content := dp.View()
 	if !strings.Contains(content, "#1") {
 		t.Error("view should contain '#1' for numbered comments")
+	}
+	if !strings.Contains(content, "#2") {
+		t.Error("view should contain '#2' for numbered comments")
 	}
 }
 
@@ -444,5 +451,136 @@ func TestCustomStyle(t *testing.T) {
 	}
 	if light.CodeBlock.Chroma != nil && light.CodeBlock.Chroma.Error.BackgroundColor != nil {
 		t.Error("light style should not have error background color")
+	}
+}
+
+func TestRenderCommentBox(t *testing.T) {
+	dp := NewDetailPane(80, 40, "dark")
+	comment := &plan.ReviewComment{
+		StepID: "S1",
+		Action: plan.ActionSuggestion,
+		Body:   "Test comment body",
+	}
+
+	box := dp.renderCommentBox(comment, 0, 1)
+	if !strings.Contains(box, "Review Comment") {
+		t.Error("box should contain 'Review Comment' header")
+	}
+	if !strings.Contains(box, "suggestion") {
+		t.Error("box should contain action label")
+	}
+	if !strings.Contains(box, "Test comment body") {
+		t.Error("box should contain comment body")
+	}
+	// Box should contain border characters
+	if !strings.Contains(box, "╭") || !strings.Contains(box, "╰") {
+		t.Error("box should contain rounded border characters")
+	}
+}
+
+func TestRenderCommentBoxNumbered(t *testing.T) {
+	dp := NewDetailPane(80, 40, "dark")
+	comment := &plan.ReviewComment{
+		StepID: "S1",
+		Action: plan.ActionIssue,
+		Body:   "Numbered comment",
+	}
+
+	box := dp.renderCommentBox(comment, 1, 3)
+	if !strings.Contains(box, "#2") {
+		t.Error("box should contain '#2' for numbered comment")
+	}
+}
+
+func TestRenderCommentBoxEmptyBody(t *testing.T) {
+	dp := NewDetailPane(80, 40, "dark")
+	comment := &plan.ReviewComment{
+		StepID: "S1",
+		Action: plan.ActionSuggestion,
+	}
+
+	box := dp.renderCommentBox(comment, 0, 1)
+	if !strings.Contains(box, "Review Comment") {
+		t.Error("box should contain header even with empty body")
+	}
+}
+
+func TestRenderCommentBoxLightTheme(t *testing.T) {
+	dp := NewDetailPane(80, 40, "light")
+	if dp.commentBorderColor() != "33" {
+		t.Errorf("light theme border color = %s, want 33", dp.commentBorderColor())
+	}
+
+	dpDark := NewDetailPane(80, 40, "dark")
+	if dpDark.commentBorderColor() != "62" {
+		t.Errorf("dark theme border color = %s, want 62", dpDark.commentBorderColor())
+	}
+}
+
+func TestScrollToStepID(t *testing.T) {
+	dp := NewDetailPane(80, 10, "dark")
+	// Set enough content so viewport allows scrolling
+	lines := make([]string, 100)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line %d", i)
+	}
+	dp.viewport.SetContent(strings.Join(lines, "\n"))
+	dp.sectionOffsets = []sectionOffset{
+		{line: 5, stepID: "S1"},
+		{line: 20, stepID: "S2"},
+		{line: 40, stepID: "S3"},
+	}
+
+	t.Run("known stepID", func(t *testing.T) {
+		dp.ScrollToStepID("S2")
+		if dp.viewport.YOffset != 20 {
+			t.Errorf("YOffset = %d, want 20", dp.viewport.YOffset)
+		}
+	})
+
+	t.Run("unknown stepID", func(t *testing.T) {
+		dp.viewport.SetYOffset(10)
+		dp.ScrollToStepID("S99")
+		if dp.viewport.YOffset != 10 {
+			t.Errorf("YOffset should not change for unknown stepID, got %d", dp.viewport.YOffset)
+		}
+	})
+
+	t.Run("empty stepID scrolls to top", func(t *testing.T) {
+		dp.viewport.SetYOffset(10)
+		dp.ScrollToStepID("")
+		if dp.viewport.YOffset != 0 {
+			t.Errorf("YOffset = %d, want 0 for empty stepID", dp.viewport.YOffset)
+		}
+	})
+}
+
+func TestInsertCommentBoxes(t *testing.T) {
+	dp := NewDetailPane(80, 80, "dark")
+	p := &plan.Plan{
+		Title: "Plan",
+		Steps: []*plan.Step{
+			{ID: "S1", Title: "Step One", Level: 2, Body: "Body one"},
+			{ID: "S2", Title: "Step Two", Level: 2, Body: "Body two"},
+		},
+	}
+	getComments := func(stepID string) []*plan.ReviewComment {
+		if stepID == "S1" {
+			return []*plan.ReviewComment{
+				{StepID: "S1", Action: plan.ActionSuggestion, Body: "Comment on S1"},
+			}
+		}
+		return nil
+	}
+
+	dp.ShowAll(p, getComments)
+	content := dp.viewport.View()
+
+	// Should contain comment box content
+	if !strings.Contains(content, "Comment on S1") {
+		t.Error("ShowAll should contain comment box content")
+	}
+	if !strings.Contains(content, "Review Comment") {
+		t.Error("ShowAll should contain comment box header")
 	}
 }

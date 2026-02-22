@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/ansi"
 	glamourStyles "github.com/charmbracelet/glamour/styles"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/koh-sh/ccplan/internal/plan"
 	"github.com/mattn/go-runewidth"
 )
@@ -91,27 +92,23 @@ func (d *DetailPane) SetSize(width, height int) {
 // ShowStep renders and displays a step's content.
 func (d *DetailPane) ShowStep(step *plan.Step, comments []*plan.ReviewComment) {
 	d.sectionOffsets = nil
-	var content strings.Builder
-
-	fmt.Fprintf(&content, "## %s: %s\n\n", step.ID, step.Title)
-
+	var md strings.Builder
+	fmt.Fprintf(&md, "## %s: %s\n\n", step.ID, step.Title)
 	if step.Body != "" {
-		content.WriteString(step.Body + "\n")
+		md.WriteString(step.Body + "\n")
 	}
 
-	for i, comment := range comments {
-		content.WriteString("\n---\n\n")
-		if len(comments) == 1 {
-			fmt.Fprintf(&content, "**Review Comment** [%s]\n\n", comment.Action)
-		} else {
-			fmt.Fprintf(&content, "**Review Comment #%d** [%s]\n\n", i+1, comment.Action)
-		}
-		if comment.Body != "" {
-			content.WriteString(comment.Body + "\n")
-		}
-	}
+	rendered := d.renderContent(md.String())
 
-	d.renderContent(content.String())
+	if len(comments) > 0 {
+		var full strings.Builder
+		full.WriteString(rendered)
+		for i, c := range comments {
+			full.WriteString(d.renderCommentBox(c, i, len(comments)))
+			full.WriteString("\n")
+		}
+		d.viewport.SetContent(full.String())
+	}
 }
 
 // ShowOverview renders and displays the plan overview (preamble).
@@ -131,45 +128,39 @@ func (d *DetailPane) ShowOverview(p *plan.Plan) {
 
 // ShowAll renders the entire plan in a single view.
 func (d *DetailPane) ShowAll(p *plan.Plan, getComments func(string) []*plan.ReviewComment) {
-	var content strings.Builder
+	var md strings.Builder
 
 	if p.Title != "" {
-		fmt.Fprintf(&content, "# %s\n\n", p.Title)
+		fmt.Fprintf(&md, "# %s\n\n", p.Title)
 	}
 	if p.Preamble != "" {
-		content.WriteString(p.Preamble + "\n")
+		md.WriteString(p.Preamble + "\n")
 	}
 
-	var walkSteps func(steps []*plan.Step)
-	walkSteps = func(steps []*plan.Step) {
+	var stepOrder []string
+	var walkBuild func([]*plan.Step)
+	walkBuild = func(steps []*plan.Step) {
 		for _, step := range steps {
-			content.WriteString("\n")
+			md.WriteString("\n")
 			heading := strings.Repeat("#", step.Level)
-			fmt.Fprintf(&content, "%s %s: %s\n\n", heading, step.ID, step.Title)
+			fmt.Fprintf(&md, "%s %s: %s\n\n", heading, step.ID, step.Title)
 			if step.Body != "" {
-				content.WriteString(step.Body + "\n")
+				md.WriteString(step.Body + "\n")
 			}
-
-			for i, comment := range getComments(step.ID) {
-				content.WriteString("\n---\n\n")
-				comments := getComments(step.ID)
-				if len(comments) == 1 {
-					fmt.Fprintf(&content, "**Review Comment** [%s]\n\n", comment.Action)
-				} else {
-					fmt.Fprintf(&content, "**Review Comment #%d** [%s]\n\n", i+1, comment.Action)
-				}
-				if comment.Body != "" {
-					content.WriteString(comment.Body + "\n")
-				}
-			}
-
-			walkSteps(step.Children)
+			stepOrder = append(stepOrder, step.ID)
+			walkBuild(step.Children)
 		}
 	}
-	walkSteps(p.Steps)
+	walkBuild(p.Steps)
 
-	rendered := d.renderContent(content.String())
+	rendered := d.renderContent(md.String())
 	d.buildSectionOffsets(rendered)
+
+	if d.hasAnyComments(stepOrder, getComments) {
+		rendered = d.insertCommentBoxes(rendered, stepOrder, getComments)
+		d.viewport.SetContent(rendered)
+		d.buildSectionOffsets(rendered)
+	}
 }
 
 // renderContent renders Markdown content into the viewport and returns the rendered string.
@@ -340,4 +331,92 @@ func (d *DetailPane) StepIDAtOffset(yOffset int) string {
 		}
 	}
 	return result
+}
+
+// ScrollToStepID scrolls the viewport to the given step's section offset.
+func (d *DetailPane) ScrollToStepID(stepID string) {
+	if stepID == "" {
+		d.viewport.GotoTop()
+		return
+	}
+	for _, so := range d.sectionOffsets {
+		if so.stepID == stepID {
+			d.viewport.SetYOffset(so.line)
+			return
+		}
+	}
+}
+
+func (d *DetailPane) commentBorderColor() string {
+	if d.theme == "light" {
+		return "33"
+	}
+	return "62"
+}
+
+func (d *DetailPane) renderCommentBox(comment *plan.ReviewComment, index, total int) string {
+	var header string
+	if total == 1 {
+		header = fmt.Sprintf("Review Comment [%s]", comment.Action)
+	} else {
+		header = fmt.Sprintf("Review Comment #%d [%s]", index+1, comment.Action)
+	}
+
+	content := header
+	if comment.Body != "" {
+		content += "\n\n" + comment.Body
+	}
+
+	boxWidth := d.width - glamourHorizontalOverhead
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(d.commentBorderColor())).
+		Width(boxWidth).
+		Padding(0, 1)
+
+	return style.Render(content)
+}
+
+func (d *DetailPane) hasAnyComments(stepOrder []string, getComments func(string) []*plan.ReviewComment) bool {
+	for _, id := range stepOrder {
+		if len(getComments(id)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (d *DetailPane) insertCommentBoxes(rendered string, stepOrder []string, getComments func(string) []*plan.ReviewComment) string {
+	lines := strings.Split(rendered, "\n")
+
+	endLines := make(map[string]int)
+	for i, so := range d.sectionOffsets {
+		if i+1 < len(d.sectionOffsets) {
+			endLines[so.stepID] = d.sectionOffsets[i+1].line
+		} else {
+			endLines[so.stepID] = len(lines)
+		}
+	}
+
+	for i := len(stepOrder) - 1; i >= 0; i-- {
+		stepID := stepOrder[i]
+		comments := getComments(stepID)
+		if len(comments) == 0 {
+			continue
+		}
+		insertAt := endLines[stepID]
+		var boxes []string
+		for ci, c := range comments {
+			boxStr := d.renderCommentBox(c, ci, len(comments))
+			boxes = append(boxes, strings.Split(boxStr, "\n")...)
+		}
+		boxes = append(boxes, "")
+		newLines := make([]string, 0, len(lines)+len(boxes))
+		newLines = append(newLines, lines[:insertAt]...)
+		newLines = append(newLines, boxes...)
+		newLines = append(newLines, lines[insertAt:]...)
+		lines = newLines
+	}
+
+	return strings.Join(lines, "\n")
 }

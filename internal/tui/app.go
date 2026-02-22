@@ -162,7 +162,9 @@ func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if msg.String() == "g" {
 			if a.focus == FocusLeft {
 				a.stepList.CursorTop()
-				if !a.fullView {
+				if a.fullView {
+					a.scrollDetailToSelected()
+				} else {
 					a.refreshDetail()
 				}
 			} else {
@@ -182,7 +184,9 @@ func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "G":
 		if a.focus == FocusLeft {
 			a.stepList.CursorBottom()
-			if !a.fullView {
+			if a.fullView {
+				a.scrollDetailToSelected()
+			} else {
 				a.refreshDetail()
 			}
 		} else {
@@ -240,13 +244,17 @@ func (a *App) handleLeftPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, a.keymap.Up):
 		a.stepList.CursorUp()
-		if !a.fullView {
+		if a.fullView {
+			a.scrollDetailToSelected()
+		} else {
 			a.refreshDetail()
 		}
 
 	case key.Matches(msg, a.keymap.Down):
 		a.stepList.CursorDown()
-		if !a.fullView {
+		if a.fullView {
+			a.scrollDetailToSelected()
+		} else {
 			a.refreshDetail()
 		}
 
@@ -465,13 +473,17 @@ func (a *App) handleSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case key.Matches(msg, a.keymap.Up):
 		a.stepList.CursorUp()
-		if !a.fullView {
+		if a.fullView {
+			a.scrollDetailToSelected()
+		} else {
 			a.refreshDetail()
 		}
 		return a, nil
 	case key.Matches(msg, a.keymap.Down):
 		a.stepList.CursorDown()
-		if !a.fullView {
+		if a.fullView {
+			a.scrollDetailToSelected()
+		} else {
 			a.refreshDetail()
 		}
 		return a, nil
@@ -507,6 +519,19 @@ func (a *App) syncCursorToScroll() {
 		return
 	}
 	a.stepList.SelectByStepID(stepID)
+}
+
+func (a *App) scrollDetailToSelected() {
+	if a.detail == nil {
+		return
+	}
+	if a.stepList.IsOverviewSelected() {
+		a.detail.ScrollToStepID("")
+		return
+	}
+	if step := a.stepList.Selected(); step != nil {
+		a.detail.ScrollToStepID(step.ID)
+	}
 }
 
 func (a *App) refreshDetail() {

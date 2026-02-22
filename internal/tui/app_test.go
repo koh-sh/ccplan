@@ -919,66 +919,97 @@ func TestFullViewFromRightPane(t *testing.T) {
 	}
 }
 
-func TestFullViewCursorMoveKeepsScroll(t *testing.T) {
-	a := initApp(t, makeLargePlan(5, 2))
+func TestFullViewCursorScrollsDetail(t *testing.T) {
+	p := makeLargePlan(10, 0)
+	app := NewApp(p, AppOptions{})
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 15})
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
 
-	// Enter full view and scroll down in the detail pane
 	a.Update(keyMsg("f"))
 	if !a.fullView {
 		t.Fatal("should be in full view")
 	}
 
-	// Scroll detail pane down
-	a.detail.Viewport().ScrollDown(5)
-	yBefore := a.detail.Viewport().YOffset
-
-	// Move cursor in left pane (j/k)
-	a.Update(keyMsg("j"))
-	yAfter := a.detail.Viewport().YOffset
-	if yAfter != yBefore {
-		t.Errorf("cursor move should not change YOffset in full view: before=%d, after=%d", yBefore, yAfter)
+	// Move cursor down several times
+	for range 5 {
+		a.Update(keyMsg("j"))
 	}
 
-	a.Update(keyMsg("k"))
-	yAfterK := a.detail.Viewport().YOffset
-	if yAfterK != yBefore {
-		t.Errorf("cursor k should not change YOffset in full view: before=%d, after=%d", yBefore, yAfterK)
+	selected := a.stepList.Selected()
+	if selected == nil {
+		t.Fatal("expected a selected step")
+	}
+
+	// YOffset should match the selected step's section offset
+	yOffset := a.detail.Viewport().YOffset
+	var expectedOffset int
+	for _, so := range a.detail.sectionOffsets {
+		if so.stepID == selected.ID {
+			expectedOffset = so.line
+			break
+		}
+	}
+	if yOffset != expectedOffset {
+		t.Errorf("YOffset = %d, want %d (offset for %s)", yOffset, expectedOffset, selected.ID)
 	}
 }
 
-func TestFullViewGGKeepsScroll(t *testing.T) {
-	a := initApp(t, makeLargePlan(5, 0))
+func TestFullViewGGScrollsToTop(t *testing.T) {
+	p := makeLargePlan(10, 0)
+	app := NewApp(p, AppOptions{})
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 15})
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
 
 	a.Update(keyMsg("f"))
-	a.Update(keyMsg("j")) // move down first (before fullView scroll effect is set up)
 
-	// Scroll detail pane down
-	a.detail.Viewport().ScrollDown(3)
-	yBefore := a.detail.Viewport().YOffset
+	// Move down first
+	for range 5 {
+		a.Update(keyMsg("j"))
+	}
+	if a.detail.Viewport().YOffset == 0 {
+		t.Fatal("YOffset should not be 0 after moving down")
+	}
 
 	// gg (left pane focused)
 	a.Update(keyMsg("g"))
 	a.Update(keyMsg("g"))
-	yAfter := a.detail.Viewport().YOffset
-	if yAfter != yBefore {
-		t.Errorf("gg should not change YOffset in full view: before=%d, after=%d", yBefore, yAfter)
+	if a.detail.Viewport().YOffset != 0 {
+		t.Errorf("gg should scroll to top, YOffset=%d", a.detail.Viewport().YOffset)
 	}
 }
 
-func TestFullViewGKeepsScroll(t *testing.T) {
-	a := initApp(t, makeLargePlan(5, 0))
+func TestFullViewGScrollsToLastStep(t *testing.T) {
+	p := makeLargePlan(10, 0)
+	app := NewApp(p, AppOptions{})
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 15})
+	a, ok := model.(*App)
+	if !ok {
+		t.Fatalf("model type = %T, want *App", model)
+	}
 
 	a.Update(keyMsg("f"))
 
-	// Scroll detail pane down
-	a.detail.Viewport().ScrollDown(3)
-	yBefore := a.detail.Viewport().YOffset
-
 	// G (left pane focused)
 	a.Update(keyMsg("G"))
-	yAfter := a.detail.Viewport().YOffset
-	if yAfter != yBefore {
-		t.Errorf("G should not change YOffset in full view: before=%d, after=%d", yBefore, yAfter)
+
+	selected := a.stepList.Selected()
+	if selected == nil {
+		t.Fatal("expected a selected step")
+	}
+	if selected.ID != "S10" {
+		t.Errorf("G should select last step, got %s", selected.ID)
+	}
+
+	// YOffset should be scrolled down (viewport may clamp to max scroll)
+	yOffset := a.detail.Viewport().YOffset
+	if yOffset == 0 {
+		t.Error("YOffset should be > 0 after G to last step")
 	}
 }
 
