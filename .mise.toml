@@ -3,3 +3,4 @@
 "github:mfridman/tparse" = "latest"
 "github:mvdan/gofumpt" = "latest"
 "github:k1LoW/octocov" = "latest"
+"github:goreleaser/goreleaser" = "latest"

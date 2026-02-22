@@ -35,7 +35,27 @@ checksum:
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 changelog:
-  use: github-native
+  use: git
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Refactoring
+      regexp: '^.*?refactor(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - '^docs:'
+      - '^chore:'
+      - '^style:'
+      - '^test:'
+      - '^ci:'
 # The lines beneath this are called `modelines`. See `:help modeline`
 # Feel free to remove those if you don't want/use them.
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
