@@ -14,6 +14,8 @@ ccplan is a Go CLI tool for reviewing Claude Code-generated plans in an interact
 
 ## Build & Test Commands
 
+Dev tools (golangci-lint, tparse, gofumpt, octocov) are managed by mise (`.mise.toml`). Run `mise install` to set up the toolchain.
+
 ```bash
 make ci                                 # Run full CI pipeline (MUST pass)
 make build                              # Build binary
@@ -48,9 +50,39 @@ Linter config: `.golangci.yml` (enabled: asciicheck, gocritic, misspell, nolintl
 
 **Hook**: Claude Code (PostToolUse: Write|Edit) → stdin JSON → `hook.Run()` → `pane.SpawnAndWait(ccplan review ...)` → temp file IPC → exit 0 or 2
 
+## Development Rules
+
+- Use `go doc` to look up library APIs and usage (more accurate than web searches)
+- Do not use Python for complex scripting. Use shell scripts instead
+- Do not use `/tmp`. Keep temporary files within the project directory
+
+## Implementation Guidelines
+
+### Code
+
+- Follow Go idioms and best practices
+- Keep design style consistent across subcommands (Kong struct tags, error handling patterns, etc.)
+- Follow the DRY principle and eliminate duplicate code
+- Keep package and function responsibilities single-purpose. Do not mix multiple responsibilities
+- Keep functions unexported (lowercase) unless they are referenced externally
+- Use function and variable names that clearly represent their responsibilities
+- Add comments for code or logic that is not immediately obvious
+
+### Tests
+
+- Write all tests in table-driven test format
+- Do not write meaningless tests that only exist to inflate coverage
+
+### Documentation
+
+- Keep the README clear and concise for users
+- Update the README when code specifications change
+
 ## Key Design Decisions
 
 - **goldmark AST walk** for Markdown parsing instead of regex to correctly handle `#` inside code fences
+- **Mermaid → ASCII rendering** via `mermaid-ascii` library; fenced `\`\`\`mermaid` blocks are converted to ASCII art in the detail pane, with fallback to raw source on error
+- **Content-hash based viewed tracking** (`state.go`): steps are tracked by title → SHA-256 hash of title+body; if content changes, the viewed mark auto-clears
 - **PostToolUse (Write|Edit) hook** instead of Stop hook, because Stop doesn't fire during plan mode
 - **Temp files for IPC** between hook process and review subprocess (which runs in a separate pane)
 - **Hook always exits 0 on error** — never breaks the Claude Code workflow; uses `PLAN_REVIEW_SKIP=1` env var to disable
