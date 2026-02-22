@@ -52,7 +52,6 @@ changelog:
   filters:
     exclude:
       - '^docs:'
-      - '^chore:'
       - '^style:'
       - '^test:'
       - '^ci:'
