@@ -1,14 +1,14 @@
-.PHONY: test fmt cov tidy run lint fix build
+.PHONY: test fmt cov tidy run lint fix build upgrade-tools
 
 COVFILE = coverage.out
 COVHTML = cover.html
 GITHUB_REPOSITORY = koh-sh/ccplan
 
 test:
-	go test ./... -json | go tool tparse -all
+	go test ./... -json | tparse -all
 
 fmt:
-	go tool gofumpt -l -w .
+	gofumpt -l -w .
 
 cov:
 	go test -cover ./... -coverprofile=$(COVFILE)
@@ -20,7 +20,7 @@ tidy:
 	go mod tidy -v
 
 lint:
-	go tool golangci-lint run --fix
+	golangci-lint run --fix
 
 build:
 	go build -o ccplan .
@@ -30,3 +30,7 @@ ci: fmt fix lint build cov
 # Go Fix (modernize)
 fix:
 	go fix ./...
+
+# Upgrade dev tools managed by mise to latest versions
+upgrade-tools:
+	mise up

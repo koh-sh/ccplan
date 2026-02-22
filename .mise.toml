@@ -1,0 +1,5 @@
+[tools]
+"github:golangci/golangci-lint" = "latest"
+"github:mfridman/tparse" = "latest"
+"github:mvdan/gofumpt" = "latest"
+"github:k1LoW/octocov" = "latest"
