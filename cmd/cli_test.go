@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/kong"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestVersionCmdRun(t *testing.T) {
@@ -299,14 +300,20 @@ func TestReviewCmdRunNoTerminal(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Use a pipe with Ctrl+C as input to prevent bubbletea from falling back
+	// to /dev/tty, which would start a real TUI and hang the test.
+	pr, pw, _ := os.Pipe()
+	_, _ = pw.Write([]byte{3}) // Ctrl+C to quit immediately
+	pw.Close()
+
 	r := &ReviewCmd{
 		PlanFile: planFile,
 		Output:   "stdout",
+		teaOpts:  []tea.ProgramOption{tea.WithInput(pr)},
 	}
-	// Should fail at prog.Run() because no terminal is available
 	err := r.Run()
-	if err == nil {
-		t.Error("expected error when running TUI without terminal")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 

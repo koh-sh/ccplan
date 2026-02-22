@@ -66,7 +66,8 @@ func (r *ReviewCmd) Run() error {
 		FilePath:    r.PlanFile,
 		TrackViewed: r.TrackViewed,
 	})
-	prog := tea.NewProgram(app, tea.WithAltScreen())
+	opts := append([]tea.ProgramOption{tea.WithAltScreen()}, r.teaOpts...)
+	prog := tea.NewProgram(app, opts...)
 	finalModel, err := prog.Run()
 	if err != nil {
 		return fmt.Errorf("running TUI: %w", err)

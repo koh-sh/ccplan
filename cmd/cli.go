@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/alecthomas/kong"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // CLI is the top-level command structure for ccplan.
@@ -27,6 +28,8 @@ type ReviewCmd struct {
 	OutputPath  string `help:"File path for file output" type:"path"`
 	Theme       string `enum:"dark,light" default:"dark" help:"Color theme (dark|light)"`
 	TrackViewed bool   `help:"Persist viewed state to sidecar file for change detection across sessions"`
+
+	teaOpts []tea.ProgramOption // for testing: override tea.NewProgram options
 }
 
 // LocateCmd is the locate subcommand.
