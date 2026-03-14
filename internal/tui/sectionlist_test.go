@@ -177,72 +177,6 @@ func TestToggleExpand(t *testing.T) {
 	})
 }
 
-func TestExpandCollapse(t *testing.T) {
-	t.Run("expand already expanded", func(t *testing.T) {
-		sl := NewSectionList(makeDocWithChildren(), nil)
-		sl.CursorDown() // S1, already expanded
-		sl.Expand()     // no-op
-		if !sl.items[sl.cursor].Expanded {
-			t.Error("should still be expanded")
-		}
-	})
-
-	t.Run("expand collapsed", func(t *testing.T) {
-		sl := NewSectionList(makeDocWithChildren(), nil)
-		sl.CursorDown() // S1
-		sl.ToggleExpand()
-		if sl.items[sl.cursor].Expanded {
-			t.Fatal("should be collapsed")
-		}
-		sl.Expand()
-		if !sl.items[sl.cursor].Expanded {
-			t.Error("should be expanded after Expand()")
-		}
-	})
-
-	t.Run("collapse expanded", func(t *testing.T) {
-		sl := NewSectionList(makeDocWithChildren(), nil)
-		sl.CursorDown() // S1
-		sl.Collapse()
-		if sl.items[sl.cursor].Expanded {
-			t.Error("should be collapsed after Collapse()")
-		}
-	})
-
-	t.Run("collapse moves to parent", func(t *testing.T) {
-		sl := NewSectionList(makeDocWithChildren(), nil)
-		// Move to S1.1
-		sl.CursorDown() // S1
-		sl.CursorDown() // S1.1
-		if sl.items[sl.cursor].Section.ID != "S1.1" {
-			t.Fatalf("expected S1.1, got %s", sl.items[sl.cursor].Section.ID)
-		}
-		sl.Collapse() // should move to parent S1
-		if sl.items[sl.cursor].Section.ID != "S1" {
-			t.Errorf("after Collapse on leaf: section = %s, want S1", sl.items[sl.cursor].Section.ID)
-		}
-	})
-
-	t.Run("collapse overview is no-op", func(t *testing.T) {
-		sl := NewSectionList(makeDocWithChildren(), nil)
-		cursorBefore := sl.cursor
-		sl.Collapse() // cursor at overview, should be no-op
-		if sl.cursor != cursorBefore {
-			t.Errorf("Collapse on overview moved cursor from %d to %d", cursorBefore, sl.cursor)
-		}
-	})
-
-	t.Run("expand no children is no-op", func(t *testing.T) {
-		sl := NewSectionList(makeDocWithChildren(), nil)
-		sl.CursorBottom() // S2 (no children)
-		expanded := sl.items[sl.cursor].Expanded
-		sl.Expand() // no-op
-		if sl.items[sl.cursor].Expanded != expanded {
-			t.Error("Expand on leaf should not change Expanded state")
-		}
-	})
-}
-
 func TestAddComment(t *testing.T) {
 	sl := NewSectionList(makeDocWithChildren(), nil)
 
@@ -568,7 +502,7 @@ func TestRenderCollapsedSection(t *testing.T) {
 
 	// Collapse S1 to get ▶ prefix rendered
 	sl.CursorDown() // move to S1
-	sl.Collapse()
+	sl.ToggleExpand()
 
 	output := sl.Render(80, 20, styles)
 
@@ -605,16 +539,6 @@ func TestToggleExpandOutOfBounds(t *testing.T) {
 	sl.ToggleExpand()
 	if sl.cursor != 999 {
 		t.Error("ToggleExpand out of bounds should not move cursor")
-	}
-
-	sl.Expand()
-	if sl.cursor != 999 {
-		t.Error("Expand out of bounds should not move cursor")
-	}
-
-	sl.Collapse()
-	if sl.cursor != 999 {
-		t.Error("Collapse out of bounds should not move cursor")
 	}
 }
 

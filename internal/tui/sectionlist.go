@@ -30,16 +30,16 @@ type SectionList struct {
 }
 
 // NewSectionList creates a new SectionList from a parsed document.
-func NewSectionList(p *markdown.Document, state *markdown.ViewedState) *SectionList {
+func NewSectionList(doc *markdown.Document, state *markdown.ViewedState) *SectionList {
 	sl := &SectionList{
 		comments:    make(map[string][]*markdown.ReviewComment),
 		viewed:      make(map[string]bool),
 		viewedState: state,
-		doc:         p,
+		doc:         doc,
 	}
 
 	// Add overview entry if there's a preamble
-	if p.Preamble != "" {
+	if doc.Preamble != "" {
 		sl.items = append(sl.items, SectionListItem{
 			Visible:    true,
 			IsOverview: true,
@@ -59,7 +59,7 @@ func NewSectionList(p *markdown.Document, state *markdown.ViewedState) *SectionL
 			flatten(s.Children, depth+1)
 		}
 	}
-	flatten(p.Sections, 0)
+	flatten(doc.Sections, 0)
 
 	// Restore viewed flags from persisted state
 	if state != nil {
@@ -124,49 +124,6 @@ func (sl *SectionList) ToggleExpand() {
 	}
 	item.Expanded = !item.Expanded
 	sl.updateVisibility()
-}
-
-// Expand expands the current section.
-func (sl *SectionList) Expand() {
-	if sl.cursor >= len(sl.items) {
-		return
-	}
-	item := &sl.items[sl.cursor]
-	if item.IsOverview || item.Section == nil || len(item.Section.Children) == 0 {
-		return
-	}
-	if !item.Expanded {
-		item.Expanded = true
-		sl.updateVisibility()
-	}
-}
-
-// Collapse collapses the current section.
-func (sl *SectionList) Collapse() {
-	if sl.cursor >= len(sl.items) {
-		return
-	}
-	item := &sl.items[sl.cursor]
-	if item.IsOverview {
-		return
-	}
-
-	// If current item has children and is expanded, collapse it
-	if item.Section != nil && len(item.Section.Children) > 0 && item.Expanded {
-		item.Expanded = false
-		sl.updateVisibility()
-		return
-	}
-
-	// Otherwise, move to parent
-	if item.Section != nil && item.Section.Parent != nil {
-		for i, it := range sl.items {
-			if it.Section == item.Section.Parent {
-				sl.cursor = i
-				return
-			}
-		}
-	}
 }
 
 // updateVisibility updates the Visible field for all items based on parent expansion state.

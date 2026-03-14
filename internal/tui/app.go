@@ -72,14 +72,14 @@ type AppOptions struct {
 }
 
 // NewApp creates a new App model.
-func NewApp(p *markdown.Document, opts AppOptions) *App {
+func NewApp(doc *markdown.Document, opts AppOptions) *App {
 	var state *markdown.ViewedState
 	if opts.TrackViewed && opts.FilePath != "" {
 		state = markdown.LoadViewedState(markdown.StatePath(opts.FilePath))
 	}
 	return &App{
-		doc:            p,
-		sectionList:    NewSectionList(p, state),
+		doc:            doc,
+		sectionList:    NewSectionList(doc, state),
 		comment:        NewCommentEditor(),
 		commentList:    NewCommentList(),
 		search:         NewSearchBar(),
@@ -228,10 +228,10 @@ func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Horizontal scroll keys apply to the detail pane regardless of focus
 	switch {
-	case key.Matches(msg, a.keymap.Expand):
+	case key.Matches(msg, a.keymap.ScrollRight):
 		a.detail.Viewport().ScrollRight(4)
 		return a, nil
-	case key.Matches(msg, a.keymap.Collapse):
+	case key.Matches(msg, a.keymap.ScrollLeft):
 		a.detail.Viewport().ScrollLeft(4)
 		return a, nil
 	case key.Matches(msg, a.keymap.ScrollToStart):

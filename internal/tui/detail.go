@@ -101,28 +101,28 @@ func (d *DetailPane) ShowSection(section *markdown.Section, comments []*markdown
 }
 
 // writeDocHeader writes the document title and preamble as Markdown to the builder.
-func writeDocHeader(sb *strings.Builder, p *markdown.Document) {
-	if p.Title != "" {
-		fmt.Fprintf(sb, "# %s\n\n", p.Title)
+func writeDocHeader(sb *strings.Builder, doc *markdown.Document) {
+	if doc.Title != "" {
+		fmt.Fprintf(sb, "# %s\n\n", doc.Title)
 	}
-	if p.Preamble != "" {
-		sb.WriteString(p.Preamble + "\n")
+	if doc.Preamble != "" {
+		sb.WriteString(doc.Preamble + "\n")
 	}
 }
 
 // ShowOverview renders and displays the document overview (preamble).
-func (d *DetailPane) ShowOverview(p *markdown.Document) {
+func (d *DetailPane) ShowOverview(doc *markdown.Document) {
 	d.sectionOffsets = nil
 	var content strings.Builder
-	writeDocHeader(&content, p)
+	writeDocHeader(&content, doc)
 
 	d.setViewportContent(d.renderMarkdown(content.String()))
 }
 
 // ShowAll renders the entire document in a single view.
-func (d *DetailPane) ShowAll(p *markdown.Document, getComments func(string) []*markdown.ReviewComment) {
+func (d *DetailPane) ShowAll(doc *markdown.Document, getComments func(string) []*markdown.ReviewComment) {
 	var md strings.Builder
-	writeDocHeader(&md, p)
+	writeDocHeader(&md, doc)
 
 	var sectionOrder []string
 	var walkBuild func([]*markdown.Section)
@@ -138,7 +138,7 @@ func (d *DetailPane) ShowAll(p *markdown.Document, getComments func(string) []*m
 			walkBuild(section.Children)
 		}
 	}
-	walkBuild(p.Sections)
+	walkBuild(doc.Sections)
 
 	rendered := d.renderMarkdown(md.String())
 	d.buildSectionOffsets(rendered)
