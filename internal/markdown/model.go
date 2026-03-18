@@ -2,6 +2,9 @@ package markdown
 
 import "fmt"
 
+// OverviewSectionID is the virtual section ID used for file-level comments on the overview/preamble.
+const OverviewSectionID = "overview"
+
 // Document is the parsed structure of an entire Markdown file.
 type Document struct {
 	Title    string     // H1 heading text (or filename if no H1)

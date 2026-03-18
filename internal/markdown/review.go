@@ -29,10 +29,15 @@ func FormatReview(result *ReviewResult, d *Document, filePath string) string {
 	for _, c := range result.Comments {
 		g, ok := groups[c.SectionID]
 		if !ok {
-			section := d.FindSection(c.SectionID)
-			title := c.SectionID
-			if section != nil {
-				title = fmt.Sprintf("%s: %s", c.SectionID, section.Title)
+			var title string
+			if c.SectionID == OverviewSectionID {
+				title = "Overview"
+			} else {
+				section := d.FindSection(c.SectionID)
+				title = c.SectionID
+				if section != nil {
+					title = fmt.Sprintf("%s: %s", c.SectionID, section.Title)
+				}
 			}
 			g = &group{title: title}
 			groups[c.SectionID] = g

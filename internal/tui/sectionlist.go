@@ -305,6 +305,11 @@ func (sl *SectionList) HasComments() bool {
 func (sl *SectionList) BuildReviewResult() *markdown.ReviewResult {
 	result := &markdown.ReviewResult{}
 
+	// Include overview comments first
+	for _, c := range sl.comments[markdown.OverviewSectionID] {
+		result.Comments = append(result.Comments, *c)
+	}
+
 	// Walk sections in order to maintain consistent ordering
 	allSections := sl.doc.AllSections()
 	for _, s := range allSections {
@@ -360,7 +365,8 @@ func (sl *SectionList) Render(width, height int, styles Styles) string {
 
 		var line string
 		if item.IsOverview {
-			line = "  Overview"
+			badge := sl.renderBadge(markdown.OverviewSectionID, styles)
+			line = "  Overview" + badge
 		} else if item.Section != nil {
 			indent := strings.Repeat("  ", item.Depth)
 			prefix := " "

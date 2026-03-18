@@ -514,10 +514,13 @@ func TestLeftPaneComment(t *testing.T) {
 func TestLeftPaneCommentOnOverview(t *testing.T) {
 	a := initApp(t, makeLargeDoc(3, 0))
 
-	// On overview, c should do nothing
+	// On overview, c should enter comment mode with overview section ID
 	a.Update(keyMsg("c"))
-	if a.mode != ModeNormal {
-		t.Error("c on overview should not enter comment mode")
+	if a.mode != ModeComment {
+		t.Error("c on overview should enter comment mode")
+	}
+	if a.comment.SectionID() != markdown.OverviewSectionID {
+		t.Errorf("comment sectionID = %s, want %s", a.comment.SectionID(), markdown.OverviewSectionID)
 	}
 }
 

@@ -296,24 +296,47 @@ func TestHasComments(t *testing.T) {
 }
 
 func TestBuildReviewResult(t *testing.T) {
-	sl := NewSectionList(makeDocWithChildren(), nil)
-	sl.AddComment("S2", &markdown.ReviewComment{SectionID: "S2", Body: "s2 comment"})
-	sl.AddComment("S1", &markdown.ReviewComment{SectionID: "S1", Body: "s1 comment"})
-	sl.AddComment("S1", &markdown.ReviewComment{SectionID: "S1", Body: "s1 second"})
+	tests := []struct {
+		name     string
+		comments map[string][]*markdown.ReviewComment
+		wantIDs  []string
+	}{
+		{
+			name: "section order preserved",
+			comments: map[string][]*markdown.ReviewComment{
+				"S2": {{SectionID: "S2", Body: "s2 comment"}},
+				"S1": {{SectionID: "S1", Body: "s1 comment"}, {SectionID: "S1", Body: "s1 second"}},
+			},
+			wantIDs: []string{"S1", "S1", "S2"},
+		},
+		{
+			name: "overview comments come first",
+			comments: map[string][]*markdown.ReviewComment{
+				"S1":                       {{SectionID: "S1", Body: "s1 comment"}},
+				markdown.OverviewSectionID: {{SectionID: markdown.OverviewSectionID, Body: "overview comment"}},
+			},
+			wantIDs: []string{markdown.OverviewSectionID, "S1"},
+		},
+	}
 
-	result := sl.BuildReviewResult()
-	if len(result.Comments) != 3 {
-		t.Fatalf("comments count = %d, want 3", len(result.Comments))
-	}
-	// Order should follow section order (S1, S1, S2)
-	if result.Comments[0].SectionID != "S1" {
-		t.Errorf("first comment sectionID = %s, want S1", result.Comments[0].SectionID)
-	}
-	if result.Comments[1].SectionID != "S1" {
-		t.Errorf("second comment sectionID = %s, want S1", result.Comments[1].SectionID)
-	}
-	if result.Comments[2].SectionID != "S2" {
-		t.Errorf("third comment sectionID = %s, want S2", result.Comments[2].SectionID)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sl := NewSectionList(makeDocWithChildren(), nil)
+			for id, comments := range tt.comments {
+				for _, c := range comments {
+					sl.AddComment(id, c)
+				}
+			}
+			result := sl.BuildReviewResult()
+			if len(result.Comments) != len(tt.wantIDs) {
+				t.Fatalf("comments count = %d, want %d", len(result.Comments), len(tt.wantIDs))
+			}
+			for i, wantID := range tt.wantIDs {
+				if result.Comments[i].SectionID != wantID {
+					t.Errorf("comment[%d] sectionID = %s, want %s", i, result.Comments[i].SectionID, wantID)
+				}
+			}
+		})
 	}
 }
 

@@ -122,6 +122,28 @@ func TestFormatReview(t *testing.T) {
 			},
 		},
 		{
+			name: "overview comment uses Overview heading",
+			doc: &Document{
+				Title: "Test Plan",
+				Sections: []*Section{
+					{ID: "S1", Title: "First Step", Level: 2},
+				},
+			},
+			result: &ReviewResult{
+				Comments: []ReviewComment{
+					{SectionID: OverviewSectionID, Action: ActionNote, Body: "Overall looks good."},
+					{SectionID: "S1", Action: ActionSuggestion, Body: "Change the algorithm."},
+				},
+			},
+			filePath: "plan.md",
+			wantContains: []string{
+				"## Overview\n",
+				"[note] Overall looks good.",
+				"## S1: First Step\n",
+				"[suggestion] Change the algorithm.",
+			},
+		},
+		{
 			name: "empty filePath uses fallback text",
 			doc: &Document{
 				Sections: []*Section{

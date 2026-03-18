@@ -314,18 +314,20 @@ func (a *App) handleLeftPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.sectionList.ToggleExpand()
 
 	case key.Matches(msg, a.keymap.Comment):
-		if section := a.sectionList.Selected(); section != nil {
+		sectionID := a.selectedSectionID()
+		if sectionID != "" {
 			a.editCommentIdx = -1
-			cmd := a.comment.Open(section.ID, nil)
+			cmd := a.comment.Open(sectionID, nil)
 			a.mode = ModeComment
 			return a, cmd
 		}
 
 	case key.Matches(msg, a.keymap.CommentList):
-		if section := a.sectionList.Selected(); section != nil {
-			comments := a.sectionList.GetComments(section.ID)
+		sectionID := a.selectedSectionID()
+		if sectionID != "" {
+			comments := a.sectionList.GetComments(sectionID)
 			if len(comments) > 0 {
-				a.commentList.Open(section.ID, comments)
+				a.commentList.Open(sectionID, comments)
 				a.mode = ModeCommentList
 			}
 		}
@@ -588,7 +590,8 @@ func (a *App) refreshDetail() {
 	}
 
 	if a.sectionList.IsOverviewSelected() {
-		a.detail.ShowOverview(a.doc)
+		comments := a.sectionList.GetComments(markdown.OverviewSectionID)
+		a.detail.ShowOverview(a.doc, comments)
 		return
 	}
 
@@ -596,6 +599,18 @@ func (a *App) refreshDetail() {
 		comments := a.sectionList.GetComments(section.ID)
 		a.detail.ShowSection(section, comments)
 	}
+}
+
+// selectedSectionID returns the section ID of the currently selected item.
+// Returns OverviewSectionID for overview, the section's ID for sections, or "" if nothing is selected.
+func (a *App) selectedSectionID() string {
+	if a.sectionList.IsOverviewSelected() {
+		return markdown.OverviewSectionID
+	}
+	if section := a.sectionList.Selected(); section != nil {
+		return section.ID
+	}
+	return ""
 }
 
 func (a *App) renderTitleBar() string {

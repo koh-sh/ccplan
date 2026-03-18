@@ -73,13 +73,38 @@ func TestDetailPaneShowSectionWithMultipleComments(t *testing.T) {
 }
 
 func TestDetailPaneShowOverview(t *testing.T) {
-	dp := NewDetailPane(80, 40, "dark")
-	p := &markdown.Document{Title: "My Plan", Preamble: "Unique overview text"}
+	tests := []struct {
+		name         string
+		doc          *markdown.Document
+		comments     []*markdown.ReviewComment
+		wantContains []string
+	}{
+		{
+			name:         "preamble without comments",
+			doc:          &markdown.Document{Title: "My Plan", Preamble: "Unique overview text"},
+			wantContains: []string{"Unique"},
+		},
+		{
+			name: "preamble with comments",
+			doc:  &markdown.Document{Title: "My Plan", Preamble: "Overview text"},
+			comments: []*markdown.ReviewComment{
+				{SectionID: markdown.OverviewSectionID, Action: markdown.ActionNote, Body: "overall looks good"},
+			},
+			wantContains: []string{"Overview", "overall looks good"},
+		},
+	}
 
-	dp.ShowOverview(p)
-	content := dp.View()
-	if !strings.Contains(content, "Unique") {
-		t.Errorf("view should contain preamble word, got:\n%s", content)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dp := NewDetailPane(80, 40, "dark")
+			dp.ShowOverview(tt.doc, tt.comments)
+			content := dp.View()
+			for _, want := range tt.wantContains {
+				if !strings.Contains(content, want) {
+					t.Errorf("view should contain %q, got:\n%s", want, content)
+				}
+			}
+		})
 	}
 }
 
@@ -435,7 +460,7 @@ func TestShowOverviewClearsSectionOffsets(t *testing.T) {
 	dp.sectionOffsets = []sectionOffset{{line: 0, sectionID: "S1"}}
 
 	p := &markdown.Document{Title: "Plan", Preamble: "Text"}
-	dp.ShowOverview(p)
+	dp.ShowOverview(p, nil)
 
 	if dp.sectionOffsets != nil {
 		t.Error("ShowOverview should clear sectionOffsets")

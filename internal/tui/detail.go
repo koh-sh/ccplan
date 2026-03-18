@@ -87,17 +87,7 @@ func (d *DetailPane) ShowSection(section *markdown.Section, comments []*markdown
 	}
 
 	rendered := d.renderMarkdown(md.String())
-
-	if len(comments) > 0 {
-		var full strings.Builder
-		full.WriteString(rendered)
-		for i, c := range comments {
-			full.WriteString(d.renderCommentBox(c, i, len(comments)))
-			full.WriteString("\n")
-		}
-		rendered = full.String()
-	}
-	d.setViewportContent(rendered)
+	d.setViewportContent(d.appendCommentBoxes(rendered, comments))
 }
 
 // writeDocHeader writes the document title and preamble as Markdown to the builder.
@@ -111,12 +101,27 @@ func writeDocHeader(sb *strings.Builder, doc *markdown.Document) {
 }
 
 // ShowOverview renders and displays the document overview (preamble).
-func (d *DetailPane) ShowOverview(doc *markdown.Document) {
+func (d *DetailPane) ShowOverview(doc *markdown.Document, comments []*markdown.ReviewComment) {
 	d.sectionOffsets = nil
 	var content strings.Builder
 	writeDocHeader(&content, doc)
 
-	d.setViewportContent(d.renderMarkdown(content.String()))
+	rendered := d.renderMarkdown(content.String())
+	d.setViewportContent(d.appendCommentBoxes(rendered, comments))
+}
+
+// appendCommentBoxes appends rendered comment boxes to the given content.
+func (d *DetailPane) appendCommentBoxes(rendered string, comments []*markdown.ReviewComment) string {
+	if len(comments) == 0 {
+		return rendered
+	}
+	var sb strings.Builder
+	sb.WriteString(rendered)
+	for i, c := range comments {
+		sb.WriteString(d.renderCommentBox(c, i, len(comments)))
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }
 
 // ShowAll renders the entire document in a single view.
