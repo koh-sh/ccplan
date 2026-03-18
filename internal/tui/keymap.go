@@ -31,6 +31,12 @@ type KeyMap struct {
 	PaneGrow   key.Binding
 	PaneShrink key.Binding
 
+	// Page scrolling
+	HalfPageDown key.Binding
+	HalfPageUp   key.Binding
+	PageDown     key.Binding
+	PageUp       key.Binding
+
 	// Comment list specific
 	Edit   key.Binding
 	Delete key.Binding
@@ -117,6 +123,22 @@ func DefaultKeyMap() KeyMap {
 		),
 		PaneShrink: key.NewBinding(
 			key.WithKeys("<"),
+			key.WithHelp("", ""),
+		),
+		HalfPageDown: key.NewBinding(
+			key.WithKeys("ctrl+d"),
+			key.WithHelp("ctrl+d/u", "half page"),
+		),
+		HalfPageUp: key.NewBinding(
+			key.WithKeys("ctrl+u"),
+			key.WithHelp("", ""),
+		),
+		PageDown: key.NewBinding(
+			key.WithKeys("ctrl+f"),
+			key.WithHelp("ctrl+f/b", "full page"),
+		),
+		PageUp: key.NewBinding(
+			key.WithKeys("ctrl+b"),
 			key.WithHelp("", ""),
 		),
 		Edit: key.NewBinding(

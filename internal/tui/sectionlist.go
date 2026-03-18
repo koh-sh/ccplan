@@ -113,6 +113,60 @@ func (sl *SectionList) CursorBottom() {
 	}
 }
 
+// CursorHalfPageDown moves the cursor down by half the visible page height.
+func (sl *SectionList) CursorHalfPageDown(pageHeight int) {
+	sl.cursorMoveNDown(max(pageHeight/2, 1))
+}
+
+// CursorHalfPageUp moves the cursor up by half the visible page height.
+func (sl *SectionList) CursorHalfPageUp(pageHeight int) {
+	sl.cursorMoveNUp(max(pageHeight/2, 1))
+}
+
+// CursorPageDown moves the cursor down by the visible page height.
+func (sl *SectionList) CursorPageDown(pageHeight int) {
+	sl.cursorMoveNDown(max(pageHeight, 1))
+}
+
+// CursorPageUp moves the cursor up by the visible page height.
+func (sl *SectionList) CursorPageUp(pageHeight int) {
+	sl.cursorMoveNUp(max(pageHeight, 1))
+}
+
+// cursorMoveNDown moves the cursor down by n visible items.
+func (sl *SectionList) cursorMoveNDown(n int) {
+	for range n {
+		next := -1
+		for i := sl.cursor + 1; i < len(sl.items); i++ {
+			if sl.items[i].Visible {
+				next = i
+				break
+			}
+		}
+		if next < 0 {
+			break
+		}
+		sl.cursor = next
+	}
+}
+
+// cursorMoveNUp moves the cursor up by n visible items.
+func (sl *SectionList) cursorMoveNUp(n int) {
+	for range n {
+		prev := -1
+		for i := sl.cursor - 1; i >= 0; i-- {
+			if sl.items[i].Visible {
+				prev = i
+				break
+			}
+		}
+		if prev < 0 {
+			break
+		}
+		sl.cursor = prev
+	}
+}
+
 // ToggleExpand toggles the expand/collapse state of the current section.
 func (sl *SectionList) ToggleExpand() {
 	if sl.cursor >= len(sl.items) {

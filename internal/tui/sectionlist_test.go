@@ -711,6 +711,82 @@ func TestSelectBySectionID(t *testing.T) {
 	}
 }
 
+func TestCursorPageScroll(t *testing.T) {
+	// makeDocWithChildren: overview(0), S1(1), S1.1(2), S1.2(3), S2(4) — 5 visible items
+	tests := []struct {
+		name       string
+		startID    string // "" means overview
+		method     string
+		pageHeight int
+		wantID     string // "" means overview
+	}{
+		// half page down
+		{name: "half page down from top", startID: "", method: "HalfPageDown", pageHeight: 4, wantID: "S1.1"},
+		{name: "half page down near bottom", startID: "S1.2", method: "HalfPageDown", pageHeight: 4, wantID: "S2"},
+		{name: "half page down at bottom", startID: "S2", method: "HalfPageDown", pageHeight: 4, wantID: "S2"},
+		// half page up
+		{name: "half page up from bottom", startID: "S2", method: "HalfPageUp", pageHeight: 4, wantID: "S1.1"},
+		{name: "half page up near top", startID: "S1", method: "HalfPageUp", pageHeight: 4, wantID: ""},
+		{name: "half page up at top", startID: "", method: "HalfPageUp", pageHeight: 4, wantID: ""},
+		// full page down
+		{name: "full page down from top", startID: "", method: "PageDown", pageHeight: 4, wantID: "S2"},
+		{name: "full page down at bottom", startID: "S2", method: "PageDown", pageHeight: 4, wantID: "S2"},
+		// full page up
+		{name: "full page up from bottom", startID: "S2", method: "PageUp", pageHeight: 4, wantID: ""},
+		{name: "full page up at top", startID: "", method: "PageUp", pageHeight: 4, wantID: ""},
+		// height=1
+		{name: "half page down height 1", startID: "", method: "HalfPageDown", pageHeight: 1, wantID: "S1"},
+		{name: "full page down height 1", startID: "", method: "PageDown", pageHeight: 1, wantID: "S1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sl := NewSectionList(makeDocWithChildren(), nil)
+			// Move cursor to startID
+			if tt.startID != "" {
+				sl.SelectBySectionID(tt.startID)
+			}
+
+			switch tt.method {
+			case "HalfPageDown":
+				sl.CursorHalfPageDown(tt.pageHeight)
+			case "HalfPageUp":
+				sl.CursorHalfPageUp(tt.pageHeight)
+			case "PageDown":
+				sl.CursorPageDown(tt.pageHeight)
+			case "PageUp":
+				sl.CursorPageUp(tt.pageHeight)
+			}
+
+			gotID := ""
+			if sel := sl.Selected(); sel != nil {
+				gotID = sel.ID
+			}
+			if gotID != tt.wantID {
+				t.Errorf("cursor at %q, want %q", gotID, tt.wantID)
+			}
+		})
+	}
+}
+
+func TestCursorPageScrollSkipsHidden(t *testing.T) {
+	sl := NewSectionList(makeDocWithChildren(), nil)
+	// Collapse S1 so S1.1 and S1.2 are hidden
+	// Visible: overview(0), S1(1), S2(4)
+	sl.SelectBySectionID("S1")
+	sl.ToggleExpand()
+	sl.CursorTop() // back to overview
+
+	sl.CursorHalfPageDown(4) // move 2 visible items: overview -> S1 -> S2
+	gotID := ""
+	if sel := sl.Selected(); sel != nil {
+		gotID = sel.ID
+	}
+	if gotID != "S2" {
+		t.Errorf("half page down with collapsed children: cursor at %q, want S2", gotID)
+	}
+}
+
 func TestViewedStateNil(t *testing.T) {
 	sl := NewSectionList(makeDocWithChildren(), nil)
 

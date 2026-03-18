@@ -1322,6 +1322,76 @@ func TestGInRightPane(t *testing.T) {
 	}
 }
 
+func TestPageScrollLeftPane(t *testing.T) {
+	// makeLargeDoc(10, 0): overview + S1..S10 = 11 items, height=30
+	a := initApp(t, makeLargeDoc(10, 0))
+
+	// Move cursor down several sections
+	for range 5 {
+		a.sectionList.CursorDown()
+	}
+	startID := a.sectionList.Selected().ID
+
+	// Ctrl+U: half page up
+	a.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
+	if a.sectionList.Selected() != nil && a.sectionList.Selected().ID == startID {
+		t.Error("Ctrl+U should move cursor up from current position")
+	}
+
+	// Ctrl+D: half page down back
+	a.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+	// Should have moved down
+
+	// Ctrl+F: full page down
+	a.sectionList.CursorTop()
+	a.Update(tea.KeyMsg{Type: tea.KeyCtrlF})
+	if a.sectionList.IsOverviewSelected() {
+		t.Error("Ctrl+F should move cursor away from top")
+	}
+
+	// Ctrl+B: full page up
+	a.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	if !a.sectionList.IsOverviewSelected() {
+		t.Error("Ctrl+B from near top should return to overview")
+	}
+}
+
+func TestPageScrollRightPane(t *testing.T) {
+	a := initApp(t, makeLargeDoc(10, 0))
+	a.focus = FocusRight
+
+	// Enable full view so there is enough content to scroll
+	a.fullView = true
+	a.refreshDetail()
+
+	// Ctrl+D: half page down in right pane
+	a.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+	if a.detail.viewport.YOffset == 0 {
+		t.Error("Ctrl+D in right pane should scroll down")
+	}
+	offsetAfterDown := a.detail.viewport.YOffset
+
+	// Ctrl+U: half page up in right pane
+	a.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
+	if a.detail.viewport.YOffset >= offsetAfterDown {
+		t.Error("Ctrl+U in right pane should scroll up")
+	}
+
+	// Ctrl+F: full page down
+	a.detail.viewport.SetYOffset(0)
+	a.Update(tea.KeyMsg{Type: tea.KeyCtrlF})
+	if a.detail.viewport.YOffset == 0 {
+		t.Error("Ctrl+F in right pane should scroll down")
+	}
+
+	// Ctrl+B: full page up
+	offsetAfterPageDown := a.detail.viewport.YOffset
+	a.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	if a.detail.viewport.YOffset >= offsetAfterPageDown {
+		t.Error("Ctrl+B in right pane should scroll up")
+	}
+}
+
 func TestRenderRightContentModes(t *testing.T) {
 	a := initApp(t, makeLargeDoc(3, 0))
 

@@ -254,6 +254,46 @@ func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// Page scroll keys dispatch based on focus
+	switch {
+	case key.Matches(msg, a.keymap.HalfPageDown):
+		if a.focus == FocusLeft {
+			a.sectionList.CursorHalfPageDown(a.contentHeight())
+			a.refreshAfterCursorMove()
+		} else {
+			a.detail.Viewport().HalfPageDown()
+			a.syncCursorToScroll()
+		}
+		return a, nil
+	case key.Matches(msg, a.keymap.HalfPageUp):
+		if a.focus == FocusLeft {
+			a.sectionList.CursorHalfPageUp(a.contentHeight())
+			a.refreshAfterCursorMove()
+		} else {
+			a.detail.Viewport().HalfPageUp()
+			a.syncCursorToScroll()
+		}
+		return a, nil
+	case key.Matches(msg, a.keymap.PageDown):
+		if a.focus == FocusLeft {
+			a.sectionList.CursorPageDown(a.contentHeight())
+			a.refreshAfterCursorMove()
+		} else {
+			a.detail.Viewport().PageDown()
+			a.syncCursorToScroll()
+		}
+		return a, nil
+	case key.Matches(msg, a.keymap.PageUp):
+		if a.focus == FocusLeft {
+			a.sectionList.CursorPageUp(a.contentHeight())
+			a.refreshAfterCursorMove()
+		} else {
+			a.detail.Viewport().PageUp()
+			a.syncCursorToScroll()
+		}
+		return a, nil
+	}
+
 	if a.focus == FocusLeft {
 		return a.handleLeftPaneKeys(msg)
 	}
@@ -835,6 +875,8 @@ func (a *App) renderHelp() string {
     f               Toggle full/section view
     h/l, Left/Right Scroll detail pane left/right
     H/L             Scroll detail to start/end
+    Ctrl+D/Ctrl+U   Half page down/up
+    Ctrl+F/Ctrl+B   Full page down/up
     >/<             Resize left pane
     Tab             Switch between left/right pane
 
