@@ -12,6 +12,13 @@ updates:
       day: "friday"
     cooldown:
       default-days: 5
+  - package-ecosystem: "npm"
+    directory: "/e2e"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+    cooldown:
+      default-days: 5
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
