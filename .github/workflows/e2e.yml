@@ -1,0 +1,31 @@
+name: E2E Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+
+  e2e:
+    runs-on: ubuntu-24.04-arm
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: go.mod
+
+    - name: Build
+      run: go build -o commd .
+
+    - name: Set up Bun
+      uses: oven-sh/setup-bun@v2
+
+    - name: Install dependencies
+      run: cd e2e && bun install --frozen-lockfile
+
+    - name: Run E2E tests
+      run: cd e2e && bun test
