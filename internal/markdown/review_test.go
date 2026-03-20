@@ -144,6 +144,62 @@ func TestFormatReview(t *testing.T) {
 			},
 		},
 		{
+			name: "line-level comment single line",
+			doc: &Document{
+				Sections: []*Section{
+					{ID: "S1", Title: "Step One", Level: 2},
+				},
+			},
+			result: &ReviewResult{
+				Comments: []ReviewComment{
+					{SectionID: "S1", Action: ActionSuggestion, Body: "Fix this line.", StartLine: 10},
+				},
+			},
+			filePath: "plan.md",
+			wantContains: []string{
+				"---\n",
+				"`L10` [suggestion] Fix this line.",
+			},
+		},
+		{
+			name: "line-level comment range",
+			doc: &Document{
+				Sections: []*Section{
+					{ID: "S1", Title: "Step One", Level: 2},
+				},
+			},
+			result: &ReviewResult{
+				Comments: []ReviewComment{
+					{SectionID: "S1", Action: ActionIssue, Decoration: DecorationBlocking, Body: "Refactor this block.", StartLine: 10, EndLine: 15},
+				},
+			},
+			filePath: "plan.md",
+			wantContains: []string{
+				"`L10-L15` [issue (blocking)] Refactor this block.",
+			},
+		},
+		{
+			name: "mixed section and line comments",
+			doc: &Document{
+				Sections: []*Section{
+					{ID: "S1", Title: "Step One", Level: 2},
+				},
+			},
+			result: &ReviewResult{
+				Comments: []ReviewComment{
+					{SectionID: "S1", Action: ActionNote, Body: "Section comment."},
+					{SectionID: "S1", Action: ActionSuggestion, Body: "Line comment.", StartLine: 5},
+				},
+			},
+			filePath: "plan.md",
+			wantContains: []string{
+				"## S1: Step One\n",
+				"[note] Section comment.",
+				"---\n",
+				"`L5` [suggestion] Line comment.",
+			},
+		},
+		{
 			name: "empty filePath uses fallback text",
 			doc: &Document{
 				Sections: []*Section{

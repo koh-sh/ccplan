@@ -14,6 +14,8 @@ type CommentEditor struct {
 	sectionID  string
 	labelIndex int // index into markdown.ActionLabels
 	decoIndex  int // index into markdown.DecorationLabels
+	startLine  int // 1-based start line (0 = section-level)
+	endLine    int // 1-based end line (0 = single line)
 }
 
 // NewCommentEditor creates a new CommentEditor.
@@ -37,13 +39,26 @@ func (c *CommentEditor) Open(sectionID string, existing *markdown.ReviewComment)
 		c.labelIndex = c.labelIndexFor(existing.Action)
 		c.decoIndex = c.decorationIndexFor(existing.Decoration)
 		c.textarea.SetValue(existing.Body)
+		c.startLine = existing.StartLine
+		c.endLine = existing.EndLine
 	} else {
 		c.labelIndex = c.labelIndexFor(markdown.DefaultAction)
 		c.decoIndex = 0
 		c.textarea.SetValue("")
+		c.startLine = 0
+		c.endLine = 0
 	}
 
 	return c.textarea.Focus()
+}
+
+// OpenWithLines opens the comment editor for a new line-level comment.
+// existing must be nil; use Open directly when editing existing comments.
+func (c *CommentEditor) OpenWithLines(sectionID string, existing *markdown.ReviewComment, startLine, endLine int) tea.Cmd {
+	cmd := c.Open(sectionID, existing)
+	c.startLine = startLine
+	c.endLine = endLine
+	return cmd
 }
 
 // labelIndexFor returns the index of the given action in ActionLabels.
@@ -94,6 +109,11 @@ func (c *CommentEditor) FormatLabel() string {
 	)
 }
 
+// FormatLineRef returns a line reference string for display.
+func (c *CommentEditor) FormatLineRef() string {
+	return markdown.FormatLineRef(c.startLine, c.endLine)
+}
+
 // decorationIndexFor returns the index of the given decoration in DecorationLabels.
 func (c *CommentEditor) decorationIndexFor(deco markdown.Decoration) int {
 	return indexInSlice(markdown.DecorationLabels, deco)
@@ -123,6 +143,8 @@ func (c *CommentEditor) Result() *markdown.ReviewComment {
 		Action:     markdown.ActionLabels[c.labelIndex],
 		Decoration: markdown.DecorationLabels[c.decoIndex],
 		Body:       body,
+		StartLine:  c.startLine,
+		EndLine:    c.endLine,
 	}
 }
 

@@ -74,7 +74,11 @@ func (cl *CommentList) Render(width, height int, styles Styles) string {
 			prefix = "> "
 		}
 
-		header := fmt.Sprintf("%s#%d [%s]", prefix, i+1, c.FormatLabel())
+		lineRef := ""
+		if ref := c.FormatLineRef(); ref != "" {
+			lineRef = " (" + ref + ")"
+		}
+		header := fmt.Sprintf("%s#%d [%s]%s", prefix, i+1, c.FormatLabel(), lineRef)
 		if i == cl.cursor {
 			sb.WriteString(styles.SelectedSection.Render(header))
 		} else {

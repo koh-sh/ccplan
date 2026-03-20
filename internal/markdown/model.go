@@ -7,19 +7,22 @@ const OverviewSectionID = "overview"
 
 // Document is the parsed structure of an entire Markdown file.
 type Document struct {
-	Title    string     // H1 heading text (or filename if no H1)
-	Preamble string     // Text before the first heading
-	Sections []*Section // Top-level sections
+	Title       string     // H1 heading text (or filename if no H1)
+	Preamble    string     // Text before the first heading
+	Sections    []*Section // Top-level sections
+	SourceLines []string   // Raw source lines (for line-level commenting)
 }
 
 // Section is a single section in a document, corresponding to one heading.
 type Section struct {
-	ID       string     // Auto-numbered: "S1", "S1.1", "S2", etc.
-	Title    string     // Heading text (without the "## " prefix)
-	Level    int        // Heading level (2=##, 3=###, ...)
-	Body     string     // Markdown text from heading to next heading
-	Children []*Section // Sub-sections (lower-level headings)
-	Parent   *Section   // Parent section (nil for top-level)
+	ID        string     // Auto-numbered: "S1", "S1.1", "S2", etc.
+	Title     string     // Heading text (without the "## " prefix)
+	Level     int        // Heading level (2=##, 3=###, ...)
+	Body      string     // Markdown text from heading to next heading
+	Children  []*Section // Sub-sections (lower-level headings)
+	Parent    *Section   // Parent section (nil for top-level)
+	StartLine int        // 1-based line number of heading (0 = not set)
+	EndLine   int        // 1-based line number of last body line (0 = not set)
 }
 
 // AllSections returns a flat list of all sections in depth-first order.
@@ -52,12 +55,32 @@ type ReviewComment struct {
 	Action     ActionType // Comment action type
 	Decoration Decoration // Comment decoration (e.g. non-blocking, blocking)
 	Body       string     // Comment body text
+	StartLine  int        // 1-based start line (0 = section-level comment)
+	EndLine    int        // 1-based end line (0 = single line if StartLine > 0)
 }
 
 // FormatLabel returns the formatted label string for display.
 // With decoration: "action (decoration)", without: "action".
 func (c *ReviewComment) FormatLabel() string {
 	return FormatActionLabel(c.Action, c.Decoration)
+}
+
+// FormatLineRef returns a line reference string for display.
+// Returns "L10" for single line, "L10-L15" for range, or "" for section-level.
+func (c *ReviewComment) FormatLineRef() string {
+	return FormatLineRef(c.StartLine, c.EndLine)
+}
+
+// FormatLineRef formats a line reference from start and end line numbers.
+// Returns "L10" for single line, "L10-L15" for range, or "" if startLine is 0.
+func FormatLineRef(startLine, endLine int) string {
+	if startLine == 0 {
+		return ""
+	}
+	if endLine == 0 || endLine == startLine {
+		return fmt.Sprintf("L%d", startLine)
+	}
+	return fmt.Sprintf("L%d-L%d", startLine, endLine)
 }
 
 // FormatActionLabel formats an action and decoration pair for display.

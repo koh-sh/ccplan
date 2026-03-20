@@ -1,7 +1,7 @@
 # commd
 
 Interactive Markdown reviewer with TUI.
-Add inline review comments to each section using [Conventional Comments](https://conventionalcomments.org/) and output structured feedback.
+Add review comments at section level or line level using [Conventional Comments](https://conventionalcomments.org/) and output structured feedback.
 
 > Formerly **ccplan** — see [Migration from ccplan](#migration-from-ccplan) for upgrade instructions.
 
@@ -64,16 +64,20 @@ commd version
 
 | Key | Action |
 |-----|--------|
-| `j` / `k` / `↑` / `↓` | Navigate sections |
-| `gg` / `G` | Jump to first / last section |
+| `j` / `k` / `↑` / `↓` | Navigate sections (left pane) or lines (right pane, raw view) |
+| `gg` / `G` | Jump to first / last |
+| `Ctrl+D` / `Ctrl+U` | Half page down / up |
+| `Ctrl+F` / `Ctrl+B` | Full page down / up |
 | `l` / `h` / `→` / `←` | Expand / collapse (left pane) / Scroll right / left (right pane) |
 | `H` / `L` | Scroll to start / end (right pane) |
 | `>` / `<` | Resize left pane wider / narrower |
 | `Enter` | Toggle expand/collapse |
 | `Tab` | Switch focus between panes |
-| `f` | Toggle full view / section view (right pane) |
-| `c` | Add comment |
+| `f` | Toggle full view / section view |
+| `r` | Toggle raw source view (with line numbers) / rendered view |
+| `c` | Add comment (section-level in rendered view, line-level in raw view) |
 | `C` | Manage comments (edit/delete) |
+| `V` | Start visual line selection (raw view, right pane) |
 | `v` | Toggle viewed mark |
 | `/` | Search sections |
 | `s` | Submit review and exit |
@@ -116,6 +120,18 @@ The status bar shows key hints and a progress indicator: `[X/Y viewed]` for sect
 
 Fenced `` ```mermaid `` code blocks are automatically converted to ASCII art in the detail pane. If rendering fails (e.g. unsupported diagram type), the original source is shown as-is.
 
+## Raw Source View
+
+Press `r` to switch the right pane to raw source view with line numbers. In this mode:
+
+- **Line-level commenting**: Press `c` to comment on the cursor line
+- **Visual selection**: Press `V`, move with `j`/`k` to select a range, then `c` to comment
+- **Section navigation**: `j`/`k` at the edge of a section automatically moves to the adjacent section
+- Press `f` to toggle between section view (only selected section's lines) and full file view
+- Press `r` again to return to rendered view
+
+Both section-level comments (from rendered view) and line-level comments (from raw view) can coexist in the same session.
+
 ## Review Output Format
 
 The review output generated on submit uses [Conventional Comments](https://conventionalcomments.org/) labels:
@@ -125,15 +141,23 @@ The review output generated on submit uses [Conventional Comments](https://conve
 
 Please review and address the following comments on: /path/to/document.md
 
+## Overview
+[note] Add a performance metrics section.
+
 ## S1.1: JWT verification
 [suggestion (non-blocking)] Switch to HS256. Load the key from an environment variable.
 
 ## S2: Update routing
 [issue (blocking)] Not needed; the existing implementation covers this.
 
-## S3: Add tests
-[question] Is the coverage target 80% or 90%?
+---
+
+`L15` [question] Is this variable used?
+
+`L20-L25` [suggestion] Extract this block into a helper function.
 ```
+
+Section-level comments (including Overview for the preamble) are grouped under section headings. Line-level comments appear below a `---` divider with inline code line references.
 
 Labels: `suggestion`, `issue`, `question` (default), `nitpick`, `todo`, `thought`, `note`, `praise`, `chore`
 

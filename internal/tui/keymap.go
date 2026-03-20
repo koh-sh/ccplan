@@ -40,6 +40,10 @@ type KeyMap struct {
 	// Comment list specific
 	Edit   key.Binding
 	Delete key.Binding
+
+	// Line mode
+	RawView      key.Binding
+	VisualSelect key.Binding
 }
 
 // DefaultKeyMap returns the default key bindings.
@@ -148,6 +152,14 @@ func DefaultKeyMap() KeyMap {
 		Delete: key.NewBinding(
 			key.WithKeys("d"),
 			key.WithHelp("d", "delete"),
+		),
+		RawView: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "raw/rendered"),
+		),
+		VisualSelect: key.NewBinding(
+			key.WithKeys("V"),
+			key.WithHelp("V", "visual select"),
 		),
 	}
 }

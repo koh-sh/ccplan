@@ -44,3 +44,41 @@ func TestReviewCommentFormatLabel(t *testing.T) {
 		})
 	}
 }
+
+func TestReviewCommentFormatLineRef(t *testing.T) {
+	tests := []struct {
+		name    string
+		comment ReviewComment
+		want    string
+	}{
+		{
+			name:    "section-level (no line info)",
+			comment: ReviewComment{StartLine: 0, EndLine: 0},
+			want:    "",
+		},
+		{
+			name:    "single line",
+			comment: ReviewComment{StartLine: 10, EndLine: 0},
+			want:    "L10",
+		},
+		{
+			name:    "single line (EndLine equals StartLine)",
+			comment: ReviewComment{StartLine: 5, EndLine: 5},
+			want:    "L5",
+		},
+		{
+			name:    "line range",
+			comment: ReviewComment{StartLine: 10, EndLine: 15},
+			want:    "L10-L15",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.comment.FormatLineRef()
+			if got != tt.want {
+				t.Errorf("FormatLineRef() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

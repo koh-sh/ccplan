@@ -85,6 +85,63 @@ func TestParseBasic(t *testing.T) {
 	if len(allSections) != 7 {
 		t.Errorf("len(AllSections) = %d, want 7", len(allSections))
 	}
+
+	// Check SourceLines
+	if len(doc.SourceLines) == 0 {
+		t.Error("SourceLines should be populated")
+	}
+}
+
+func TestParseSectionLineNumbers(t *testing.T) {
+	source := readTestdata(t, "basic.md")
+	doc, err := Parse(source)
+	if err != nil {
+		t.Fatalf("Parse() error: %v", err)
+	}
+
+	// basic.md structure:
+	// Line 1: # Plan: Authentication System
+	// Line 3: This plan...
+	// Line 5: ## Step 1: Auth Middleware      (S1)
+	// Line 7: Implement authentication...
+	// Line 9: ### 1.1 JWT Verification        (S1.1)
+	// Line 11: Implement JWT...
+	// Line 13: ### 1.2 Middleware Registration (S1.2)
+	// Line 15: Register the middleware...
+	// Line 17: ## Step 2: Routing Updates      (S2)
+	// Line 19: Update the routing...
+	// Line 21: ### 2.1 Endpoint Addition       (S2.1)
+	// Line 23: Add new protected endpoints.
+	// Line 25: ### 2.2 Validation              (S2.2)
+	// Line 27: Add request validation...
+	// Line 29: ## Step 3: Tests                (S3)
+	// Line 31: Write comprehensive tests...
+	tests := []struct {
+		id        string
+		startLine int
+		endLine   int
+	}{
+		{"S1", 5, 7},
+		{"S1.1", 9, 11},
+		{"S1.2", 13, 15},
+		{"S2", 17, 19},
+		{"S2.1", 21, 23},
+		{"S2.2", 25, 27},
+		{"S3", 29, 31},
+	}
+	for _, tt := range tests {
+		s := doc.FindSection(tt.id)
+		if s == nil {
+			t.Errorf("FindSection(%q) returned nil", tt.id)
+			continue
+		}
+		if s.StartLine != tt.startLine {
+			t.Errorf("%s.StartLine = %d, want %d", tt.id, s.StartLine, tt.startLine)
+		}
+		if s.EndLine != tt.endLine {
+			t.Errorf("%s.EndLine = %d, want %d", tt.id, s.EndLine, tt.endLine)
+		}
+	}
 }
 
 func TestParseNoHeadings(t *testing.T) {
@@ -497,6 +554,30 @@ func TestFindHeadingEndNoLines(t *testing.T) {
 			t.Errorf("findHeadingEnd = %d, want 7", pos)
 		}
 	})
+}
+
+func TestByteOffsetToLine(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		offset int
+		want   int
+	}{
+		{"start of file", "hello\nworld\n", 0, 1},
+		{"after first newline", "hello\nworld\n", 6, 2},
+		{"end of file", "hello\nworld\n", 12, 3},
+		{"empty source", "", 0, 1},
+		{"single line no newline", "hello", 5, 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := byteOffsetToLine([]byte(tt.source), tt.offset)
+			if got != tt.want {
+				t.Errorf("byteOffsetToLine(%q, %d) = %d, want %d", tt.source, tt.offset, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestFindSection(t *testing.T) {

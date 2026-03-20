@@ -26,6 +26,11 @@ type Styles struct {
 
 	// Comment
 	CommentBorder lipgloss.Style
+
+	// Line mode
+	LineGutter   lipgloss.Style
+	LineCursor   lipgloss.Style
+	LineSelected lipgloss.Style
 }
 
 // colorPalette defines the color values for a theme.
@@ -40,6 +45,9 @@ type colorPalette struct {
 	statusBar       string
 	statusKey       string
 	commentBorder   string
+	lineGutter      string
+	lineCursorBg    string
+	lineSelectedBg  string
 }
 
 var (
@@ -54,6 +62,9 @@ var (
 		statusBar:       "240",
 		statusKey:       "62",
 		commentBorder:   "62",
+		lineGutter:      "240",
+		lineCursorBg:    "236",
+		lineSelectedBg:  "235",
 	}
 
 	lightPalette = colorPalette{
@@ -67,6 +78,9 @@ var (
 		statusBar:       "245",
 		statusKey:       "33",
 		commentBorder:   "33",
+		lineGutter:      "245",
+		lineCursorBg:    "254",
+		lineSelectedBg:  "253",
 	}
 )
 
@@ -98,6 +112,12 @@ func buildStyles(p colorPalette) Styles {
 		CommentBorder: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color(p.commentBorder)),
+		LineGutter: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(p.lineGutter)),
+		LineCursor: lipgloss.NewStyle().
+			Background(lipgloss.Color(p.lineCursorBg)),
+		LineSelected: lipgloss.NewStyle().
+			Background(lipgloss.Color(p.lineSelectedBg)),
 	}
 }
 

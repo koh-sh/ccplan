@@ -1,0 +1,324 @@
+package tui
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/koh-sh/commd/internal/markdown"
+)
+
+func newTestLinePane(lines []string, sections []*markdown.Section) *LinePane {
+	styles := stylesForTheme(ThemeDark)
+	return NewLinePane(lines, 40, 10, styles, sections)
+}
+
+func TestLinePaneCursorMovement(t *testing.T) {
+	lines := []string{"line1", "line2", "line3", "line4", "line5"}
+
+	tests := []struct {
+		name   string
+		setup  func(*LinePane)
+		action func(*LinePane)
+		want   int
+	}{
+		{"down from top", func(lp *LinePane) {}, func(lp *LinePane) { lp.CursorDown() }, 1},
+		{"up from middle", func(lp *LinePane) { lp.CursorDown(); lp.CursorDown() }, func(lp *LinePane) { lp.CursorUp() }, 1},
+		{"top", func(lp *LinePane) { lp.CursorDown(); lp.CursorDown() }, func(lp *LinePane) { lp.CursorTop() }, 0},
+		{"bottom", func(lp *LinePane) {}, func(lp *LinePane) { lp.CursorBottom() }, 4},
+		{"down at bottom stays", func(lp *LinePane) { lp.CursorBottom() }, func(lp *LinePane) { lp.CursorDown() }, 4},
+		{"up at top stays", func(lp *LinePane) {}, func(lp *LinePane) { lp.CursorUp() }, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lp := newTestLinePane(lines, nil)
+			tt.setup(lp)
+			tt.action(lp)
+			if lp.Cursor() != tt.want {
+				t.Errorf("cursor = %d, want %d", lp.Cursor(), tt.want)
+			}
+		})
+	}
+}
+
+func TestLinePaneSelectedRange(t *testing.T) {
+	lines := []string{"a", "b", "c", "d", "e"}
+
+	tests := []struct {
+		name      string
+		setup     func(*LinePane)
+		wantStart int
+		wantEnd   int
+	}{
+		{
+			name:      "single line no selection",
+			setup:     func(lp *LinePane) {},
+			wantStart: 1,
+			wantEnd:   0,
+		},
+		{
+			name: "visual select forward",
+			setup: func(lp *LinePane) {
+				lp.CursorDown() // cursor=1
+				lp.StartVisualSelect()
+				lp.CursorDown() // cursor=2
+				lp.CursorDown() // cursor=3
+			},
+			wantStart: 2,
+			wantEnd:   4,
+		},
+		{
+			name: "visual select backward",
+			setup: func(lp *LinePane) {
+				lp.CursorBottom() // cursor=4
+				lp.CursorUp()     // cursor=3
+				lp.StartVisualSelect()
+				lp.CursorUp() // cursor=2
+				lp.CursorUp() // cursor=1
+			},
+			wantStart: 2,
+			wantEnd:   4,
+		},
+		{
+			name: "after cancel",
+			setup: func(lp *LinePane) {
+				lp.CursorDown() // cursor=1
+				lp.StartVisualSelect()
+				lp.CursorDown() // cursor=2
+				lp.CancelVisualSelect()
+			},
+			wantStart: 3,
+			wantEnd:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lp := newTestLinePane(lines, nil)
+			tt.setup(lp)
+			start, end := lp.SelectedRange()
+			if start != tt.wantStart || end != tt.wantEnd {
+				t.Errorf("SelectedRange() = (%d, %d), want (%d, %d)", start, end, tt.wantStart, tt.wantEnd)
+			}
+		})
+	}
+}
+
+func TestLinePaneSectionIDAtLine(t *testing.T) {
+	sections := []*markdown.Section{
+		{ID: "S1", StartLine: 5, EndLine: 10},
+		{ID: "S2", StartLine: 12, EndLine: 20},
+	}
+	lp := newTestLinePane(make([]string, 25), sections)
+
+	tests := []struct {
+		line int
+		want string
+	}{
+		{1, markdown.OverviewSectionID},
+		{4, markdown.OverviewSectionID},
+		{5, "S1"},
+		{10, "S1"},
+		{11, "S1"},
+		{12, "S2"},
+		{20, "S2"},
+		{25, "S2"},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("line_%d", tt.line), func(t *testing.T) {
+			got := lp.SectionIDAtLine(tt.line)
+			if got != tt.want {
+				t.Errorf("SectionIDAtLine(%d) = %q, want %q", tt.line, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLinePaneScrollToLine(t *testing.T) {
+	lines := make([]string, 100)
+	for i := range lines {
+		lines[i] = "line"
+	}
+	lp := newTestLinePane(lines, nil)
+	lp.SetSize(40, 10)
+
+	lp.ScrollToLine(50)
+	if lp.Cursor() != 49 { // 0-based
+		t.Errorf("cursor = %d, want 49", lp.Cursor())
+	}
+	// Cursor should be visible
+	if lp.scrollOffset > 49 || lp.scrollOffset+lp.height <= 49 {
+		t.Errorf("cursor not visible: scrollOffset=%d, height=%d, cursor=%d",
+			lp.scrollOffset, lp.height, lp.Cursor())
+	}
+}
+
+func TestLinePaneViewContainsLineNumbers(t *testing.T) {
+	lines := []string{"hello", "world", "test"}
+	lp := newTestLinePane(lines, nil)
+	lp.SetSize(40, 10)
+
+	view := lp.View()
+	if len(view) == 0 {
+		t.Fatal("View() returned empty string")
+	}
+	if !strings.Contains(view, "│") {
+		t.Error("View() should contain gutter separator │")
+	}
+	if !strings.Contains(view, "hello") {
+		t.Error("View() should contain source line content 'hello'")
+	}
+}
+
+func TestLinePaneEmptyLines(t *testing.T) {
+	lp := newTestLinePane([]string{}, nil)
+	lp.SetSize(40, 10)
+
+	view := lp.View()
+	if view != "" {
+		t.Errorf("View() on empty should return empty string, got %q", view)
+	}
+
+	start, end := lp.SelectedRange()
+	if start != 1 || end != 0 {
+		t.Errorf("SelectedRange() on empty = (%d, %d), want (1, 0)", start, end)
+	}
+}
+
+func TestLinePaneIsVisualSelect(t *testing.T) {
+	lp := newTestLinePane([]string{"a", "b"}, nil)
+
+	if lp.IsVisualSelect() {
+		t.Error("should not be in visual select initially")
+	}
+
+	lp.StartVisualSelect()
+	if !lp.IsVisualSelect() {
+		t.Error("should be in visual select after StartVisualSelect")
+	}
+
+	lp.CancelVisualSelect()
+	if lp.IsVisualSelect() {
+		t.Error("should not be in visual select after cancel")
+	}
+}
+
+func TestLinePaneViewRange(t *testing.T) {
+	lines := []string{"a", "b", "c", "d", "e", "f", "g", "h"}
+	lp := newTestLinePane(lines, nil)
+
+	// Set view range to lines 3-5 (1-based)
+	lp.SetViewRange(3, 5)
+	if lp.rangeStart() != 2 || lp.rangeEnd() != 5 {
+		t.Errorf("range = [%d,%d), want [2,5)", lp.rangeStart(), lp.rangeEnd())
+	}
+	// Cursor should be clamped into range
+	if lp.cursor < 2 || lp.cursor > 4 {
+		t.Errorf("cursor = %d, should be in [2,4]", lp.cursor)
+	}
+
+	// CursorTop/Bottom should respect range
+	lp.CursorTop()
+	if lp.cursor != 2 {
+		t.Errorf("CursorTop = %d, want 2", lp.cursor)
+	}
+	lp.CursorBottom()
+	if lp.cursor != 4 {
+		t.Errorf("CursorBottom = %d, want 4", lp.cursor)
+	}
+
+	// CursorUp at range top should not move
+	lp.CursorTop()
+	lp.CursorUp()
+	if lp.cursor != 2 {
+		t.Errorf("CursorUp at top = %d, want 2", lp.cursor)
+	}
+
+	// CursorDown at range bottom should not move
+	lp.CursorBottom()
+	lp.CursorDown()
+	if lp.cursor != 4 {
+		t.Errorf("CursorDown at bottom = %d, want 4", lp.cursor)
+	}
+
+	// AtRangeTop/Bottom
+	lp.CursorTop()
+	if !lp.AtRangeTop() {
+		t.Error("should be AtRangeTop")
+	}
+	if lp.AtRangeBottom() {
+		t.Error("should not be AtRangeBottom")
+	}
+	lp.CursorBottom()
+	if lp.AtRangeTop() {
+		t.Error("should not be AtRangeTop")
+	}
+	if !lp.AtRangeBottom() {
+		t.Error("should be AtRangeBottom")
+	}
+
+	// ClearViewRange restores full range
+	lp.ClearViewRange()
+	if lp.rangeStart() != 0 || lp.rangeEnd() != 8 {
+		t.Errorf("after clear: range = [%d,%d), want [0,8)", lp.rangeStart(), lp.rangeEnd())
+	}
+}
+
+func TestLinePaneViewRangeRendering(t *testing.T) {
+	lines := []string{"line1", "line2", "line3", "line4", "line5"}
+	lp := newTestLinePane(lines, nil)
+	lp.SetSize(40, 10)
+
+	// Full view shows all lines
+	view := lp.View()
+	if len(view) == 0 {
+		t.Fatal("full view should not be empty")
+	}
+
+	// Section view: only lines 2-3
+	lp.SetViewRange(2, 3)
+	view = lp.View()
+	if len(view) == 0 {
+		t.Fatal("section view should not be empty")
+	}
+	if strings.Contains(view, "line1") {
+		t.Error("section view should not contain line1 (out of range)")
+	}
+	if !strings.Contains(view, "line2") {
+		t.Error("section view should contain line2")
+	}
+	if strings.Contains(view, "line4") {
+		t.Error("section view should not contain line4 (out of range)")
+	}
+}
+
+func TestLinePanePageScroll(t *testing.T) {
+	lines := make([]string, 50)
+	for i := range lines {
+		lines[i] = "line"
+	}
+	lp := newTestLinePane(lines, nil)
+	lp.SetSize(40, 10)
+
+	lp.HalfPageDown()
+	if lp.Cursor() != 5 {
+		t.Errorf("after HalfPageDown: cursor = %d, want 5", lp.Cursor())
+	}
+
+	lp.PageDown()
+	if lp.Cursor() != 15 {
+		t.Errorf("after PageDown: cursor = %d, want 15", lp.Cursor())
+	}
+
+	lp.HalfPageUp()
+	if lp.Cursor() != 10 {
+		t.Errorf("after HalfPageUp: cursor = %d, want 10", lp.Cursor())
+	}
+
+	lp.PageUp()
+	if lp.Cursor() != 0 {
+		t.Errorf("after PageUp: cursor = %d, want 0", lp.Cursor())
+	}
+}

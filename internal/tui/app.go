@@ -20,6 +20,7 @@ const (
 	ModeConfirm                    // Confirmation dialog
 	ModeHelp                       // Help overlay
 	ModeSearch                     // Section search
+	ModeLineSelect                 // Visual line selection in raw view
 )
 
 // confirmKind identifies the action pending confirmation.
@@ -52,6 +53,7 @@ type App struct {
 	doc         *markdown.Document
 	sectionList *SectionList
 	detail      *DetailPane
+	linePane    *LinePane
 	comment     *CommentEditor
 	commentList *CommentList
 	search      *SearchBar
@@ -61,6 +63,7 @@ type App struct {
 	mode      AppMode
 	focus     Focus
 	fullView  bool
+	rawView   bool // true = raw source + line numbers, false = glamour rendering
 	width     int
 	height    int
 	ready     bool
@@ -86,14 +89,15 @@ func NewApp(doc *markdown.Document, opts AppOptions) *App {
 	if opts.TrackViewed && opts.FilePath != "" {
 		state = markdown.LoadViewedState(markdown.StatePath(opts.FilePath))
 	}
-	return &App{
+	styles := stylesForTheme(opts.Theme)
+	a := &App{
 		doc:            doc,
 		sectionList:    NewSectionList(doc, state),
 		comment:        NewCommentEditor(),
 		commentList:    NewCommentList(),
 		search:         NewSearchBar(),
 		keymap:         DefaultKeyMap(),
-		styles:         stylesForTheme(opts.Theme),
+		styles:         styles,
 		leftRatio:      30,
 		opts:           opts,
 		editCommentIdx: -1,
@@ -101,11 +105,20 @@ func NewApp(doc *markdown.Document, opts AppOptions) *App {
 			Status: markdown.StatusCancelled,
 		},
 	}
+	if len(doc.SourceLines) > 0 {
+		a.linePane = NewLinePane(doc.SourceLines, 0, 0, styles, doc.AllSections())
+	}
+	return a
 }
 
 // Result returns the final result after the TUI exits.
 func (a *App) Result() AppResult {
 	return a.result
+}
+
+// isRawMode returns true when raw source view is active.
+func (a *App) isRawMode() bool {
+	return a.rawView && a.linePane != nil
 }
 
 // ViewedState returns the current viewed state for persistence.
@@ -160,6 +173,8 @@ func (a *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.handleHelpMode(msg)
 	case ModeSearch:
 		return a.handleSearchMode(msg)
+	case ModeLineSelect:
+		return a.handleLineSelectMode(msg)
 	}
 	return a, nil
 }
@@ -169,10 +184,14 @@ func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if a.pendingG {
 		a.pendingG = false
 		if msg.String() == "g" {
-			if a.focus == FocusLeft {
+			switch {
+			case a.focus == FocusLeft:
 				a.sectionList.CursorTop()
 				a.refreshAfterCursorMove()
-			} else {
+			case a.isRawMode():
+				a.linePane.CursorTop()
+				a.syncSectionFromLineCursor()
+			default:
 				a.detail.Viewport().GotoTop()
 				a.syncCursorToScroll()
 			}
@@ -187,10 +206,14 @@ func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.pendingG = true
 		return a, nil
 	case "G":
-		if a.focus == FocusLeft {
+		switch {
+		case a.focus == FocusLeft:
 			a.sectionList.CursorBottom()
 			a.refreshAfterCursorMove()
-		} else {
+		case a.isRawMode():
+			a.linePane.CursorBottom()
+			a.syncSectionFromLineCursor()
+		default:
 			a.detail.Viewport().GotoBottom()
 			a.syncCursorToScroll()
 		}
@@ -234,8 +257,27 @@ func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, a.keymap.FullView):
 		a.fullView = !a.fullView
+		if a.isRawMode() {
+			a.updateLinePaneViewRange()
+		}
 		a.refreshDetail()
 		return a, nil
+
+	case key.Matches(msg, a.keymap.RawView):
+		if a.linePane != nil {
+			a.rawView = !a.rawView
+			if a.rawView {
+				// Switch to raw view
+				a.focus = FocusRight
+				a.updateLinePaneViewRange()
+				a.linePane.CursorTop()
+				a.refreshLinePane()
+			} else {
+				// Switch back to glamour view
+				a.refreshDetail()
+			}
+			return a, nil
+		}
 	}
 
 	// Horizontal scroll keys apply to the detail pane regardless of focus
@@ -257,37 +299,53 @@ func (a *App) handleNormalMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Page scroll keys dispatch based on focus
 	switch {
 	case key.Matches(msg, a.keymap.HalfPageDown):
-		if a.focus == FocusLeft {
+		switch {
+		case a.focus == FocusLeft:
 			a.sectionList.CursorHalfPageDown(a.contentHeight())
 			a.refreshAfterCursorMove()
-		} else {
+		case a.isRawMode():
+			a.linePane.HalfPageDown()
+			a.syncSectionFromLineCursor()
+		default:
 			a.detail.Viewport().HalfPageDown()
 			a.syncCursorToScroll()
 		}
 		return a, nil
 	case key.Matches(msg, a.keymap.HalfPageUp):
-		if a.focus == FocusLeft {
+		switch {
+		case a.focus == FocusLeft:
 			a.sectionList.CursorHalfPageUp(a.contentHeight())
 			a.refreshAfterCursorMove()
-		} else {
+		case a.isRawMode():
+			a.linePane.HalfPageUp()
+			a.syncSectionFromLineCursor()
+		default:
 			a.detail.Viewport().HalfPageUp()
 			a.syncCursorToScroll()
 		}
 		return a, nil
 	case key.Matches(msg, a.keymap.PageDown):
-		if a.focus == FocusLeft {
+		switch {
+		case a.focus == FocusLeft:
 			a.sectionList.CursorPageDown(a.contentHeight())
 			a.refreshAfterCursorMove()
-		} else {
+		case a.isRawMode():
+			a.linePane.PageDown()
+			a.syncSectionFromLineCursor()
+		default:
 			a.detail.Viewport().PageDown()
 			a.syncCursorToScroll()
 		}
 		return a, nil
 	case key.Matches(msg, a.keymap.PageUp):
-		if a.focus == FocusLeft {
+		switch {
+		case a.focus == FocusLeft:
 			a.sectionList.CursorPageUp(a.contentHeight())
 			a.refreshAfterCursorMove()
-		} else {
+		case a.isRawMode():
+			a.linePane.PageUp()
+			a.syncSectionFromLineCursor()
+		default:
 			a.detail.Viewport().PageUp()
 			a.syncCursorToScroll()
 		}
@@ -314,6 +372,10 @@ func (a *App) handleLeftPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.sectionList.ToggleExpand()
 
 	case key.Matches(msg, a.keymap.Comment):
+		if a.rawView {
+			// In raw view, section-level comments are disabled from left pane
+			return a, nil
+		}
 		sectionID := a.selectedSectionID()
 		if sectionID != "" {
 			a.editCommentIdx = -1
@@ -347,6 +409,9 @@ func (a *App) handleLeftPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) handleRightPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if a.isRawMode() {
+		return a.handleLinePaneKeys(msg)
+	}
 	switch {
 	case key.Matches(msg, a.keymap.Up):
 		a.detail.Viewport().ScrollUp(1)
@@ -356,6 +421,88 @@ func (a *App) handleRightPaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.syncCursorToScroll()
 	}
 	return a, nil
+}
+
+func (a *App) handleLinePaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, a.keymap.Up):
+		if !a.fullView && a.linePane.AtRangeTop() {
+			prevID := a.selectedSectionID()
+			a.sectionList.CursorUp()
+			if a.selectedSectionID() != prevID {
+				a.updateLinePaneViewRange()
+				a.linePane.CursorBottom()
+			}
+		} else {
+			a.linePane.CursorUp()
+			a.syncSectionFromLineCursor()
+		}
+	case key.Matches(msg, a.keymap.Down):
+		if !a.fullView && a.linePane.AtRangeBottom() {
+			prevID := a.selectedSectionID()
+			a.sectionList.CursorDown()
+			if a.selectedSectionID() != prevID {
+				a.updateLinePaneViewRange()
+				a.linePane.CursorTop()
+			}
+		} else {
+			a.linePane.CursorDown()
+			a.syncSectionFromLineCursor()
+		}
+	case key.Matches(msg, a.keymap.Comment):
+		startLine, endLine := a.linePane.SelectedRange()
+		sectionID := a.linePane.SectionIDAtLine(startLine)
+		a.editCommentIdx = -1
+		cmd := a.comment.OpenWithLines(sectionID, nil, startLine, endLine)
+		a.mode = ModeComment
+		return a, cmd
+	case key.Matches(msg, a.keymap.VisualSelect):
+		a.linePane.StartVisualSelect()
+		a.mode = ModeLineSelect
+	case key.Matches(msg, a.keymap.CommentList):
+		sectionID := a.linePane.SectionIDAtLine(a.linePane.Cursor() + 1)
+		comments := a.sectionList.GetComments(sectionID)
+		if len(comments) > 0 {
+			a.commentList.Open(sectionID, comments)
+			a.mode = ModeCommentList
+		}
+	}
+	return a, nil
+}
+
+func (a *App) handleLineSelectMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, a.keymap.Up):
+		a.linePane.CursorUp()
+		a.syncSectionFromLineCursor()
+	case key.Matches(msg, a.keymap.Down):
+		a.linePane.CursorDown()
+		a.syncSectionFromLineCursor()
+	case key.Matches(msg, a.keymap.Comment):
+		startLine, endLine := a.linePane.SelectedRange()
+		sectionID := a.linePane.SectionIDAtLine(startLine)
+		a.linePane.CancelVisualSelect()
+		a.editCommentIdx = -1
+		cmd := a.comment.OpenWithLines(sectionID, nil, startLine, endLine)
+		a.mode = ModeComment
+		return a, cmd
+	case key.Matches(msg, a.keymap.Cancel):
+		a.linePane.CancelVisualSelect()
+		a.mode = ModeNormal
+	}
+	return a, nil
+}
+
+// syncSectionFromLineCursor updates the left pane cursor to match the section
+// containing the current line cursor position.
+func (a *App) syncSectionFromLineCursor() {
+	if a.linePane == nil {
+		return
+	}
+	sectionID := a.linePane.SectionIDAtLine(a.linePane.Cursor() + 1)
+	if sectionID != "" {
+		a.sectionList.SelectBySectionID(sectionID)
+	}
 }
 
 func (a *App) handleCommentMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -546,6 +693,10 @@ func (a *App) submitReview() (tea.Model, tea.Cmd) {
 }
 
 func (a *App) syncCursorToScroll() {
+	if a.isRawMode() {
+		a.syncSectionFromLineCursor()
+		return
+	}
 	if !a.fullView || a.detail == nil {
 		return
 	}
@@ -559,6 +710,19 @@ func (a *App) syncCursorToScroll() {
 // refreshAfterCursorMove updates the detail pane after cursor movement.
 // In full view, scrolls to the selected section; otherwise, refreshes the detail content.
 func (a *App) refreshAfterCursorMove() {
+	if a.isRawMode() {
+		if a.fullView {
+			// Full view: scroll to section
+			if section := a.sectionList.Selected(); section != nil && section.StartLine > 0 {
+				a.linePane.ScrollToLine(section.StartLine)
+			}
+		} else {
+			// Section view: update view range and reset to top
+			a.updateLinePaneViewRange()
+			a.linePane.CursorTop()
+		}
+		return
+	}
 	if a.fullView {
 		a.scrollDetailToSelected()
 	} else {
@@ -580,6 +744,11 @@ func (a *App) scrollDetailToSelected() {
 }
 
 func (a *App) refreshDetail() {
+	if a.isRawMode() {
+		a.refreshLinePane()
+		return
+	}
+
 	if a.detail == nil {
 		return
 	}
@@ -599,6 +768,52 @@ func (a *App) refreshDetail() {
 		comments := a.sectionList.GetComments(section.ID)
 		a.detail.ShowSection(section, comments)
 	}
+}
+
+func (a *App) refreshLinePane() {
+	if a.linePane == nil {
+		return
+	}
+	a.updateLinePaneViewRange()
+	// Collect all comments (both section-level and line-level) for inline display
+	var allComments []*markdown.ReviewComment
+	overviewComments := a.sectionList.GetComments(markdown.OverviewSectionID)
+	allComments = append(allComments, overviewComments...)
+	for _, s := range a.doc.AllSections() {
+		allComments = append(allComments, a.sectionList.GetComments(s.ID)...)
+	}
+	a.linePane.SetComments(allComments)
+}
+
+// updateLinePaneViewRange sets the linePane view range based on fullView and selected section.
+func (a *App) updateLinePaneViewRange() {
+	if a.linePane == nil {
+		return
+	}
+	if a.fullView {
+		a.linePane.ClearViewRange()
+		return
+	}
+	// Section view: show only the selected section's lines
+	if a.sectionList.IsOverviewSelected() {
+		// Overview: show from line 1 to the start of the first section
+		sections := a.doc.AllSections()
+		if len(sections) > 0 && sections[0].StartLine > 1 {
+			a.linePane.SetViewRange(1, sections[0].StartLine-1)
+		} else {
+			a.linePane.SetViewRange(1, a.linePane.LineCount())
+		}
+		return
+	}
+	if section := a.sectionList.Selected(); section != nil {
+		endLine := section.EndLine
+		if endLine <= 0 {
+			endLine = a.linePane.LineCount()
+		}
+		a.linePane.SetViewRange(section.StartLine, endLine)
+		return
+	}
+	a.linePane.ClearViewRange()
 }
 
 // selectedSectionID returns the section ID of the currently selected item.
@@ -687,6 +902,10 @@ func (a *App) updateLayout() {
 		a.detail.SetSize(rw, ch)
 	}
 
+	if a.linePane != nil {
+		a.linePane.SetSize(rw, ch)
+	}
+
 	a.comment.SetWidth(rw - 2)
 }
 
@@ -766,16 +985,37 @@ func (a *App) renderRightContent(width, height int) string {
 		commentHeight := 7
 		detailHeight := max(height-commentHeight-2, 1)
 
-		a.detail.SetSize(width, detailHeight)
-		detailView := a.detail.View()
+		// Show line ref in comment header when editing a line-level comment
+		commentLabel := "Comment [" + a.comment.FormatLabel() + "]"
+		if ref := a.comment.FormatLineRef(); ref != "" {
+			commentLabel += " (" + ref + ")"
+		}
 
-		separator := a.styles.CommentBorder.Width(width - 2).Render("Comment [" + a.comment.FormatLabel() + "]")
-		commentView := a.comment.View()
-
-		return detailView + "\n" + separator + "\n" + commentView
+		var detailView string
+		if a.isRawMode() {
+			a.linePane.SetSize(width, detailHeight)
+			detailView = a.linePane.View()
+		} else {
+			a.detail.SetSize(width, detailHeight)
+			detailView = a.detail.View()
+		}
+		separator := a.styles.CommentBorder.Width(width - 2).Render(commentLabel)
+		return detailView + "\n" + separator + "\n" + a.comment.View()
 
 	case ModeCommentList:
 		return a.commentList.Render(width, height, a.styles)
+
+	case ModeLineSelect:
+		if a.linePane != nil {
+			a.linePane.SetSize(width, height)
+			return a.linePane.View()
+		}
+		return ""
+	}
+
+	if a.isRawMode() {
+		a.linePane.SetSize(width, height)
+		return a.linePane.View()
 	}
 
 	return a.detail.View()
@@ -805,10 +1045,52 @@ func (a *App) renderStatusBar() string {
 		)
 	}
 
+	if a.mode == ModeLineSelect {
+		lineInfo := ""
+		if a.linePane != nil {
+			startLine, endLine := a.linePane.SelectedRange()
+			lineInfo = markdown.FormatLineRef(startLine, endLine)
+		}
+		return a.styles.StatusBar.Render(
+			a.styles.Title.Render("VISUAL") + "  " +
+				a.statusEntry("j/k", "extend") + "  " +
+				a.statusEntry("c", "comment") + "  " +
+				a.statusEntry("esc", "cancel") + "  " +
+				lineInfo,
+		)
+	}
+
 	if a.mode == ModeSearch {
 		return a.search.View()
 	}
 
+	if a.isRawMode() {
+		lineInfo := fmt.Sprintf("L%d/%d", a.linePane.Cursor()+1, a.linePane.LineCount())
+		progress := ""
+		if commentCount := a.sectionList.TotalCommentCount(); commentCount > 0 {
+			progress = fmt.Sprintf(" [%d comments]", commentCount)
+		}
+		// Label shows the mode that f will switch TO (not the current mode)
+		viewMode := "full"
+		if a.fullView {
+			viewMode = "section"
+		}
+
+		return a.styles.StatusBar.Render(
+			a.statusEntry("r", "render") + "  " +
+				a.statusEntry("f", viewMode) + "  " +
+				a.statusEntry("c", "comment") + "  " +
+				a.statusEntry("V", "select") + "  " +
+				a.statusEntry("C", "comments") + "  " +
+				a.statusEntry("s", "submit") + "  " +
+				a.statusEntry("tab", "switch") + "  " +
+				a.statusEntry("?", "help") + "  " +
+				a.statusEntry("q", "quit") + "  " +
+				lineInfo + progress,
+		)
+	}
+
+	// Label shows the mode that f will switch TO (not the current mode)
 	viewMode := "full"
 	if a.fullView {
 		viewMode = "section"
@@ -819,9 +1101,15 @@ func (a *App) renderStatusBar() string {
 		progress += fmt.Sprintf(" [%d comments]", commentCount)
 	}
 
+	rawToggle := ""
+	if a.linePane != nil {
+		rawToggle = a.statusEntry("r", "raw") + "  "
+	}
+
 	return a.styles.StatusBar.Render(
 		a.statusEntry("enter", "toggle") + "  " +
 			a.statusEntry("f", viewMode) + "  " +
+			rawToggle +
 			a.statusEntry("c", "comment") + "  " +
 			a.statusEntry("C", "comments") + "  " +
 			a.statusEntry("v", "viewed") + "  " +
@@ -880,6 +1168,18 @@ func clipLines(s string, maxLines int) string {
 }
 
 func (a *App) renderHelp() string {
+	rawViewHelp := ""
+	if a.linePane != nil {
+		rawViewHelp = `
+  Raw Source View (r to toggle):
+    j/k             Move line cursor
+    c               Add line comment at cursor
+    V               Start visual line selection
+    V + j/k + c     Comment on selected range
+    Esc             Cancel visual selection
+    C               Manage comments for section at cursor
+`
+	}
 	help := fmt.Sprintf(`%s
 
   Navigation:
@@ -888,6 +1188,7 @@ func (a *App) renderHelp() string {
     G               Go to bottom
     Enter           Toggle expand/collapse
     f               Toggle full/section view
+    r               Toggle raw source/rendered view
     h/l, Left/Right Scroll detail pane left/right
     H/L             Scroll detail to start/end
     Ctrl+D/Ctrl+U   Half page down/up
@@ -901,7 +1202,7 @@ func (a *App) renderHelp() string {
     v               Toggle viewed mark
     /               Search sections
     s               Submit review
-
+%s
   Comment Editor:
     Tab             Cycle label (forward)
     Shift+Tab       Cycle label (reverse)
@@ -914,7 +1215,7 @@ func (a *App) renderHelp() string {
     q, Ctrl+C       Quit
 
   Press Esc or ? or q to close this help.
-`, a.styles.Title.Render("commd - Help"))
+`, a.styles.Title.Render("commd - Help"), rawViewHelp)
 
 	return clipLines(help, a.height)
 }

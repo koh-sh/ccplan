@@ -16,7 +16,9 @@ func Parse(source []byte) (*Document, error) {
 	reader := text.NewReader(source)
 	doc := md.Parser().Parse(reader)
 
-	document := &Document{}
+	document := &Document{
+		SourceLines: strings.Split(string(source), "\n"),
+	}
 
 	type headingInfo struct {
 		level int
@@ -90,10 +92,18 @@ func Parse(source []byte) (*Document, error) {
 			continue
 		}
 
+		headingLine := byteOffsetToLine(source, h.start)
+		endLine := headingLine
+		if bodyStart < bodyEnd {
+			endLine = lastNonEmptyLine(source, bodyStart, bodyEnd, headingLine)
+		}
+
 		flatSections = append(flatSections, flatSection{
-			level: h.level,
-			title: h.title,
-			body:  body,
+			level:     h.level,
+			title:     h.title,
+			body:      body,
+			startLine: headingLine,
+			endLine:   endLine,
 		})
 	}
 
@@ -200,9 +210,11 @@ func buildHierarchy(flatSections []flatSection) []*Section {
 
 	for _, fs := range flatSections {
 		section := &Section{
-			Level: fs.level,
-			Title: fs.title,
-			Body:  fs.body,
+			Level:     fs.level,
+			Title:     fs.title,
+			Body:      fs.body,
+			StartLine: fs.startLine,
+			EndLine:   fs.endLine,
 		}
 
 		// Pop from stack until we find a parent with a lower level
@@ -260,7 +272,46 @@ func extractNodeText(n ast.Node, source []byte, sb *strings.Builder) {
 }
 
 type flatSection struct {
-	level int
-	title string
-	body  string
+	level     int
+	title     string
+	body      string
+	startLine int // 1-based line number of heading
+	endLine   int // 1-based line number of last body line
+}
+
+// byteOffsetToLine returns the 1-based line number for a byte offset.
+func byteOffsetToLine(source []byte, offset int) int {
+	line := 1
+	for i := range min(offset, len(source)) {
+		if source[i] == '\n' {
+			line++
+		}
+	}
+	return line
+}
+
+// lastNonEmptyLine returns the 1-based line number of the last non-empty line
+// in the range [startOffset, endOffset) of source. Returns startLine if no
+// non-empty line is found.
+func lastNonEmptyLine(source []byte, startOffset, endOffset int, startLine int) int {
+	if startOffset < 0 {
+		startOffset = 0
+	}
+	if endOffset > len(source) {
+		endOffset = len(source)
+	}
+	if startOffset >= endOffset {
+		return startLine
+	}
+	text := string(source[startOffset:endOffset])
+	lines := strings.Split(text, "\n")
+	last := startLine
+	lineNum := byteOffsetToLine(source, startOffset)
+	for _, l := range lines {
+		if strings.TrimSpace(l) != "" {
+			last = lineNum
+		}
+		lineNum++
+	}
+	return last
 }

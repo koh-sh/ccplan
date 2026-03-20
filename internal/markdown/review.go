@@ -6,8 +6,8 @@ import (
 )
 
 // FormatReview formats a ReviewResult as a Markdown string.
-// Comments on the same section are grouped under a single heading.
-// Format: ## {SectionID}: {SectionTitle}\n[{ActionType}] {Body}
+// Section-level comments are grouped under section headings.
+// Line-level comments are listed separately by line number.
 func FormatReview(result *ReviewResult, d *Document, filePath string) string {
 	if len(result.Comments) == 0 {
 		return ""
@@ -18,16 +18,21 @@ func FormatReview(result *ReviewResult, d *Document, filePath string) string {
 		target = "the file"
 	}
 
-	// Group comments by SectionID, preserving first-seen order.
+	// Separate section-level and line-level comments.
 	type group struct {
 		title    string
 		comments []ReviewComment
 	}
-	var order []string
-	groups := make(map[string]*group)
+	var sectionOrder []string
+	sectionGroups := make(map[string]*group)
+	var lineComments []ReviewComment
 
 	for _, c := range result.Comments {
-		g, ok := groups[c.SectionID]
+		if c.StartLine > 0 {
+			lineComments = append(lineComments, c)
+			continue
+		}
+		g, ok := sectionGroups[c.SectionID]
 		if !ok {
 			var title string
 			if c.SectionID == OverviewSectionID {
@@ -40,8 +45,8 @@ func FormatReview(result *ReviewResult, d *Document, filePath string) string {
 				}
 			}
 			g = &group{title: title}
-			groups[c.SectionID] = g
-			order = append(order, c.SectionID)
+			sectionGroups[c.SectionID] = g
+			sectionOrder = append(sectionOrder, c.SectionID)
 		}
 		g.comments = append(g.comments, c)
 	}
@@ -50,11 +55,20 @@ func FormatReview(result *ReviewResult, d *Document, filePath string) string {
 	sb.WriteString("# Review\n\n")
 	fmt.Fprintf(&sb, "Please review and address the following comments on: %s\n", target)
 
-	for _, id := range order {
-		g := groups[id]
+	// Section-level comments grouped by section
+	for _, id := range sectionOrder {
+		g := sectionGroups[id]
 		fmt.Fprintf(&sb, "\n## %s\n", g.title)
 		for _, c := range g.comments {
 			fmt.Fprintf(&sb, "[%s] %s\n", c.FormatLabel(), c.Body)
+		}
+	}
+
+	// Line-level comments with inline code decoration, separated by a divider
+	if len(lineComments) > 0 {
+		sb.WriteString("\n---\n")
+		for _, c := range lineComments {
+			fmt.Fprintf(&sb, "\n`%s` [%s] %s\n", c.FormatLineRef(), c.FormatLabel(), c.Body)
 		}
 	}
 
