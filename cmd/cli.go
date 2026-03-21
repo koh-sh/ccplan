@@ -5,11 +5,13 @@ import (
 
 	"github.com/alecthomas/kong"
 	tea "github.com/charmbracelet/bubbletea"
+	ghclient "github.com/koh-sh/commd/internal/github"
 )
 
 // CLI is the top-level command structure for commd.
 type CLI struct {
 	Review   ReviewCmd  `cmd:"" help:"Review a Markdown file in TUI"`
+	PR       PRCmd      `cmd:"" help:"Review Markdown files in a GitHub PR"`
 	Cclocate LocateCmd  `cmd:"cclocate" help:"Locate file path from Claude Code transcript"`
 	Cchook   HookCmd    `cmd:"cchook" help:"Run as Claude Code PostToolUse hook"`
 	Version  VersionCmd `cmd:"" help:"Show version"`
@@ -30,6 +32,16 @@ type ReviewCmd struct {
 	TrackViewed bool   `help:"Persist viewed state to sidecar file for change detection across sessions"`
 
 	teaOpts []tea.ProgramOption // for testing: override tea.NewProgram options
+}
+
+// PRCmd is the pr subcommand for reviewing Markdown files in a GitHub PR.
+type PRCmd struct {
+	URL   string `arg:"" help:"GitHub PR URL (e.g. https://github.com/owner/repo/pull/123)"`
+	File  string `help:"Review a specific file instead of showing file picker"`
+	Theme string `enum:"dark,light" default:"dark" help:"Color theme (dark|light)"`
+
+	teaOpts []tea.ProgramOption // for testing: override tea.NewProgram options
+	client  *ghclient.Client    // for testing: override GitHub client
 }
 
 // LocateCmd is the locate subcommand.

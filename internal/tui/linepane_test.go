@@ -322,3 +322,180 @@ func TestLinePanePageScroll(t *testing.T) {
 		t.Errorf("after PageUp: cursor = %d, want 0", lp.Cursor())
 	}
 }
+
+func TestLinePaneDiffMode(t *testing.T) {
+	lines := []string{" context", "-removed", "+added", " more"}
+	diffLineMap := []int{1, 1, 2, 3}
+	diffSideMap := []string{"RIGHT", "LEFT", "RIGHT", "RIGHT"}
+
+	tests := []struct {
+		name      string
+		cursor    int
+		wantCan   bool
+		wantStart int
+		wantEnd   int
+	}{
+		{"context line commentable", 0, true, 1, 0},
+		{"removed line commentable", 1, true, 1, 0},
+		{"added line commentable", 2, true, 2, 0},
+		{"second context commentable", 3, true, 3, 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lp := newTestLinePane(lines, nil)
+			lp.diffLineMap = diffLineMap
+			lp.diffSideMap = diffSideMap
+			lp.cursor = tt.cursor
+			lp.selectAnchor = -1
+			if got := lp.CanComment(); got != tt.wantCan {
+				t.Errorf("CanComment() = %v, want %v", got, tt.wantCan)
+			}
+			start, end := lp.SelectedRange()
+			if start != tt.wantStart || end != tt.wantEnd {
+				t.Errorf("SelectedRange() = (%d, %d), want (%d, %d)", start, end, tt.wantStart, tt.wantEnd)
+			}
+		})
+	}
+}
+
+func TestLinePaneDiffModeSetViewRange(t *testing.T) {
+	lines := []string{" ctx1", "+add", "-del", " ctx2", " ctx3", "+add2"}
+	lp := newTestLinePane(lines, nil)
+	lp.diffLineMap = []int{1, 2, 0, 5, 6, 10}
+	lp.diffSideMap = []string{"RIGHT", "RIGHT", "LEFT", "RIGHT", "RIGHT", "RIGHT"}
+
+	// Set view range to file lines 5-6 (should show diff indices 3-4)
+	lp.SetViewRange(5, 6)
+	if lp.rangeStart() != 3 {
+		t.Errorf("rangeStart() = %d, want 3", lp.rangeStart())
+	}
+	if lp.rangeEnd() != 5 {
+		t.Errorf("rangeEnd() = %d, want 5", lp.rangeEnd())
+	}
+
+	// Set range that has no diff lines — should clear view range
+	lp.SetViewRange(20, 30)
+
+	// Clear view range
+	lp.ClearViewRange()
+	if lp.rangeStart() != 0 || lp.rangeEnd() != len(lines) {
+		t.Errorf("after clear: start=%d end=%d, want 0-%d", lp.rangeStart(), lp.rangeEnd(), len(lines))
+	}
+}
+
+func TestLinePaneDiffEmptyRange(t *testing.T) {
+	lines := []string{" ctx"}
+	lp := newTestLinePane(lines, nil)
+	lp.diffLineMap = []int{10}
+	lp.diffSideMap = []string{"RIGHT"}
+	lp.SetSize(40, 5)
+
+	// Set range that has no diff lines
+	lp.SetViewRange(1, 5)
+	if !lp.emptyRange {
+		t.Error("expected emptyRange to be true")
+	}
+
+	view := lp.View()
+	if !strings.Contains(view, "No changes") {
+		t.Errorf("expected 'No changes' message, got %q", view)
+	}
+
+	// Clear should reset
+	lp.ClearViewRange()
+	if lp.emptyRange {
+		t.Error("expected emptyRange to be false after clear")
+	}
+}
+
+func TestLinePaneCursorSide(t *testing.T) {
+	lp := newTestLinePane([]string{"a", "b"}, nil)
+	lp.diffSideMap = []string{"RIGHT", "LEFT"}
+
+	lp.cursor = 0
+	if got := lp.CursorSide(); got != "RIGHT" {
+		t.Errorf("CursorSide() = %q, want RIGHT", got)
+	}
+	lp.cursor = 1
+	if got := lp.CursorSide(); got != "LEFT" {
+		t.Errorf("CursorSide() = %q, want LEFT", got)
+	}
+
+	// Non-diff mode
+	lp2 := newTestLinePane([]string{"a"}, nil)
+	if got := lp2.CursorSide(); got != "" {
+		t.Errorf("CursorSide() non-diff = %q, want empty", got)
+	}
+}
+
+func TestLinePaneDiffStyleForLine(t *testing.T) {
+	lines := []string{"  context", "+ added", "- removed", "+ also added"}
+	lp := newTestLinePane(lines, nil)
+	lp.diffTypeMap = []byte{' ', '+', '-', '+'}
+
+	tests := []struct {
+		name     string
+		idx      int
+		wantNil  bool
+		wantKind string // "added", "removed", or ""
+	}{
+		{"context line has no style", 0, true, ""},
+		{"added line has added style", 1, false, "added"},
+		{"removed line has removed style", 2, false, "removed"},
+		{"another added line", 3, false, "added"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := lp.diffStyleForLine(tt.idx)
+			if tt.wantNil {
+				if got != nil {
+					t.Errorf("expected nil style, got non-nil")
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("expected non-nil style for %s", tt.wantKind)
+			}
+			// Verify it's the correct style by comparing foreground color
+			switch tt.wantKind {
+			case "added":
+				if got.GetForeground() != lp.styles.DiffAdded.GetForeground() {
+					t.Errorf("expected DiffAdded foreground")
+				}
+			case "removed":
+				if got.GetForeground() != lp.styles.DiffRemoved.GetForeground() {
+					t.Errorf("expected DiffRemoved foreground")
+				}
+			}
+		})
+	}
+
+	// Non-diff mode returns nil
+	lp2 := newTestLinePane([]string{"a"}, nil)
+	if got := lp2.diffStyleForLine(0); got != nil {
+		t.Error("non-diff mode should return nil")
+	}
+
+	// Out of bounds returns nil
+	if got := lp.diffStyleForLine(99); got != nil {
+		t.Error("out of bounds should return nil")
+	}
+}
+
+func TestLinePaneDiffModeVisualSelect(t *testing.T) {
+	lines := []string{" ctx", "+add1", "-del", "+add2", " ctx2"}
+	lp := newTestLinePane(lines, nil)
+	lp.diffLineMap = []int{1, 2, 0, 3, 4}
+	lp.diffSideMap = []string{"RIGHT", "RIGHT", "LEFT", "RIGHT", "RIGHT"}
+
+	// Visual select from line 0 to 3 (includes removed line in middle)
+	lp.cursor = 0
+	lp.StartVisualSelect()
+	lp.cursor = 3
+	start, end := lp.SelectedRange()
+	if start != 1 || end != 3 {
+		t.Errorf("visual select range = (%d, %d), want (1, 3)", start, end)
+	}
+}

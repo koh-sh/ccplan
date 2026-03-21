@@ -31,6 +31,10 @@ type Styles struct {
 	LineGutter   lipgloss.Style
 	LineCursor   lipgloss.Style
 	LineSelected lipgloss.Style
+
+	// Diff mode
+	DiffAdded   lipgloss.Style
+	DiffRemoved lipgloss.Style
 }
 
 // colorPalette defines the color values for a theme.
@@ -48,6 +52,8 @@ type colorPalette struct {
 	lineGutter      string
 	lineCursorBg    string
 	lineSelectedBg  string
+	diffAddedFg     string
+	diffRemovedFg   string
 }
 
 var (
@@ -65,6 +71,8 @@ var (
 		lineGutter:      "240",
 		lineCursorBg:    "236",
 		lineSelectedBg:  "235",
+		diffAddedFg:     "114",
+		diffRemovedFg:   "210",
 	}
 
 	lightPalette = colorPalette{
@@ -81,6 +89,8 @@ var (
 		lineGutter:      "245",
 		lineCursorBg:    "254",
 		lineSelectedBg:  "253",
+		diffAddedFg:     "28",
+		diffRemovedFg:   "160",
 	}
 )
 
@@ -118,6 +128,10 @@ func buildStyles(p colorPalette) Styles {
 			Background(lipgloss.Color(p.lineCursorBg)),
 		LineSelected: lipgloss.NewStyle().
 			Background(lipgloss.Color(p.lineSelectedBg)),
+		DiffAdded: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(p.diffAddedFg)),
+		DiffRemoved: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(p.diffRemovedFg)),
 	}
 }
 

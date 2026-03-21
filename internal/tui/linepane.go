@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/koh-sh/commd/internal/markdown"
 	"github.com/mattn/go-runewidth"
 )
@@ -29,6 +30,12 @@ type LinePane struct {
 	styles        Styles
 	comments      []*markdown.ReviewComment
 	sectionRanges []sectionRange
+
+	// Diff mode fields (set when reviewing PR diffs)
+	diffLineMap []int    // maps display line index → file line number (0 = not commentable)
+	diffSideMap []string // maps display line index → "RIGHT" or "LEFT"
+	diffTypeMap []byte   // maps display line index → diff line type ('+', '-', ' ')
+	emptyRange  bool     // true when SetViewRange found no matching diff lines
 }
 
 // NewLinePane creates a new LinePane.
@@ -65,7 +72,8 @@ func (lp *LinePane) SetSize(width, height int) {
 	lp.height = height
 }
 
-// SetViewRange sets the visible line range (1-based, inclusive).
+// SetViewRange sets the visible line range (1-based file line numbers, inclusive).
+// In diff mode, maps file line numbers to diff display indices.
 // Pass 0, 0 to show all lines.
 func (lp *LinePane) SetViewRange(startLine, endLine int) {
 	if startLine <= 0 || endLine <= 0 {
@@ -73,8 +81,33 @@ func (lp *LinePane) SetViewRange(startLine, endLine int) {
 		lp.viewEnd = 0
 		return
 	}
-	lp.viewStart = startLine - 1
-	lp.viewEnd = min(endLine, len(lp.lines))
+
+	if lp.diffLineMap != nil {
+		// Diff mode: find display indices where the mapped file line
+		// falls within [startLine, endLine]. For removed lines (LEFT side),
+		// use the old-file line number which is also stored in diffLineMap.
+		first, last := -1, -1
+		for i, fileLine := range lp.diffLineMap {
+			if fileLine >= startLine && fileLine <= endLine {
+				if first < 0 {
+					first = i
+				}
+				last = i
+			}
+		}
+		if first < 0 {
+			lp.emptyRange = true
+			lp.viewStart = 0
+			lp.viewEnd = 0
+			return
+		}
+		lp.emptyRange = false
+		lp.viewStart = first
+		lp.viewEnd = last + 1
+	} else {
+		lp.viewStart = startLine - 1
+		lp.viewEnd = min(endLine, len(lp.lines))
+	}
 	lp.clampCursor()
 	lp.ensureVisible()
 }
@@ -83,6 +116,7 @@ func (lp *LinePane) SetViewRange(startLine, endLine int) {
 func (lp *LinePane) ClearViewRange() {
 	lp.viewStart = -1
 	lp.viewEnd = 0
+	lp.emptyRange = false
 }
 
 // rangeStart returns the 0-based start index of the visible range.
@@ -184,13 +218,72 @@ func (lp *LinePane) CancelVisualSelect() {
 // SelectedRange returns the 1-based line range for commenting.
 // Without visual selection: returns (cursor+1, 0) for single line.
 // With visual selection: returns (min+1, max+1) for range.
+// In diff mode, maps display indices to actual file line numbers.
+// Returns (0, 0) if the selected line is not commentable in diff mode.
 func (lp *LinePane) SelectedRange() (startLine, endLine int) {
+	if lp.diffLineMap != nil {
+		return lp.selectedRangeDiff()
+	}
 	if lp.selectAnchor < 0 {
 		return lp.cursor + 1, 0
 	}
 	lo := min(lp.selectAnchor, lp.cursor)
 	hi := max(lp.selectAnchor, lp.cursor)
 	return lo + 1, hi + 1
+}
+
+// selectedRangeDiff returns the line range mapped through diffLineMap.
+func (lp *LinePane) selectedRangeDiff() (startLine, endLine int) {
+	if lp.selectAnchor < 0 {
+		// Single line
+		if lp.cursor < len(lp.diffLineMap) {
+			line := lp.diffLineMap[lp.cursor]
+			if line > 0 {
+				return line, 0
+			}
+		}
+		return 0, 0
+	}
+
+	// Visual selection: find valid range boundaries
+	lo := min(lp.selectAnchor, lp.cursor)
+	hi := max(lp.selectAnchor, lp.cursor)
+
+	startLine = 0
+	endLine = 0
+	for i := lo; i <= hi; i++ {
+		if i < len(lp.diffLineMap) && lp.diffLineMap[i] > 0 {
+			if startLine == 0 {
+				startLine = lp.diffLineMap[i]
+			}
+			endLine = lp.diffLineMap[i]
+		}
+	}
+	if startLine == endLine {
+		endLine = 0
+	}
+	return startLine, endLine
+}
+
+// CursorSide returns the diff side ("RIGHT" or "LEFT") at the cursor position.
+// Returns "" in non-diff mode.
+func (lp *LinePane) CursorSide() string {
+	if lp.diffSideMap == nil || lp.cursor >= len(lp.diffSideMap) {
+		return ""
+	}
+	return lp.diffSideMap[lp.cursor]
+}
+
+// CanComment returns whether the current cursor position allows commenting.
+// All lines in the diff are commentable (added, removed, and context).
+func (lp *LinePane) CanComment() bool {
+	if lp.diffLineMap == nil {
+		return true
+	}
+	if lp.cursor < len(lp.diffLineMap) {
+		return lp.diffLineMap[lp.cursor] > 0
+	}
+	return false
 }
 
 // ScrollToLine scrolls the viewport so the given 1-based line is visible,
@@ -248,6 +341,15 @@ func (lp *LinePane) SetComments(comments []*markdown.ReviewComment) {
 
 // View renders the line pane content.
 func (lp *LinePane) View() string {
+	if lp.emptyRange {
+		msg := lp.styles.LineGutter.Render("  No changes in this section")
+		var sb strings.Builder
+		sb.WriteString(msg)
+		for i := 1; i < lp.height; i++ {
+			sb.WriteString("\n")
+		}
+		return sb.String()
+	}
 	if len(lp.lines) == 0 {
 		return ""
 	}
@@ -266,20 +368,42 @@ func (lp *LinePane) View() string {
 
 	for i := lp.scrollOffset; i < visibleEnd && linesRendered < lp.height; i++ {
 		lineNum := i + 1
-		gutter := lp.styles.LineGutter.Render(fmt.Sprintf("%*d ", lp.gutterWidth, lineNum))
+		if lp.diffLineMap != nil && i < len(lp.diffLineMap) {
+			lineNum = lp.diffLineMap[i] // use file line number (0 for removed lines)
+		}
+		gutterText := fmt.Sprintf("%*d ", lp.gutterWidth, lineNum)
+		if lineNum == 0 {
+			gutterText = strings.Repeat(" ", lp.gutterWidth) + " "
+		}
+		gutter := lp.styles.LineGutter.Render(gutterText)
 		separator := lp.styles.LineGutter.Render("│")
 
 		content := lp.lines[i]
 
-		// Apply cursor or selection styling
+		// Determine diff color style for this line
+		diffStyle := lp.diffStyleForLine(i)
+
+		// Apply cursor or selection styling, preserving diff color
 		var styledContent string
 		switch {
 		case i == lp.cursor:
-			styledContent = lp.styles.LineCursor.Render(fitToWidth(content, contentWidth))
+			style := lp.styles.LineCursor
+			if diffStyle != nil {
+				style = style.Foreground(diffStyle.GetForeground())
+			}
+			styledContent = style.Render(fitToWidth(content, contentWidth))
 		case lp.isInSelection(i):
-			styledContent = lp.styles.LineSelected.Render(fitToWidth(content, contentWidth))
+			style := lp.styles.LineSelected
+			if diffStyle != nil {
+				style = style.Foreground(diffStyle.GetForeground())
+			}
+			styledContent = style.Render(fitToWidth(content, contentWidth))
 		default:
-			styledContent = fitToWidth(content, contentWidth)
+			if diffStyle != nil {
+				styledContent = diffStyle.Render(fitToWidth(content, contentWidth))
+			} else {
+				styledContent = fitToWidth(content, contentWidth)
+			}
 		}
 
 		sb.WriteString(gutter + separator + " " + styledContent)
@@ -302,8 +426,11 @@ func (lp *LinePane) View() string {
 						break
 					}
 					padding := strings.Repeat(" ", lp.gutterWidth+2)
-					sb.WriteString(padding + " " + boxLine + "\n")
+					sb.WriteString(padding + " " + boxLine)
 					linesRendered++
+					if linesRendered < lp.height {
+						sb.WriteString("\n")
+					}
 				}
 			}
 		}
@@ -341,6 +468,21 @@ func (lp *LinePane) clampScroll() {
 	if lp.scrollOffset < lo {
 		lp.scrollOffset = lo
 	}
+}
+
+// diffStyleForLine returns the diff color style for the given display index,
+// or nil if no diff coloring applies.
+func (lp *LinePane) diffStyleForLine(idx int) *lipgloss.Style {
+	if lp.diffTypeMap == nil || idx >= len(lp.diffTypeMap) {
+		return nil
+	}
+	switch lp.diffTypeMap[idx] {
+	case '+':
+		return &lp.styles.DiffAdded
+	case '-':
+		return &lp.styles.DiffRemoved
+	}
+	return nil
 }
 
 func (lp *LinePane) isInSelection(idx int) bool {
@@ -382,7 +524,11 @@ func (lp *LinePane) renderInlineCommentBox(c *markdown.ReviewComment, maxWidth i
 		content += "\n" + c.Body
 	}
 
-	boxWidth := max(maxWidth, 20)
+	// maxWidth is contentWidth (pane width minus gutter).
+	// CommentBorder adds border(2) + padding(2) = 4 to the width.
+	// The box is also indented by gutterWidth+3 in View().
+	// So inner content width = maxWidth - border(2) - padding(2) = maxWidth - 4
+	boxWidth := max(maxWidth-4, 10)
 
 	style := lp.styles.CommentBorder.
 		Width(boxWidth).
