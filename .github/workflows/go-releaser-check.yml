@@ -23,6 +23,7 @@ jobs:
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
+          version: v2.14.3
           install-only: true
 
       - name: Run GoReleaser Check

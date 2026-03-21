@@ -41,4 +41,4 @@ install-skills:
 
 # Upgrade dev tools managed by mise to latest versions
 upgrade-tools:
-	mise up
+	mise up --local --bump

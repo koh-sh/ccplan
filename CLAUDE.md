@@ -14,7 +14,7 @@ commd is a Go CLI tool for reviewing Markdown files in an interactive TUI. It pa
 
 ## Build & Test Commands
 
-Dev tools (golangci-lint, tparse, gofumpt, octocov, bun) are managed by mise (`.mise.toml`). Run `mise install` to set up the toolchain.
+Dev tools (Go, golangci-lint, tparse, gofumpt, octocov, goreleaser, bun) are managed by mise (`.mise.toml`). Run `mise install` to set up the toolchain.
 
 ```bash
 make ci                                 # Run full CI pipeline (MUST pass)

@@ -1,7 +1,11 @@
+[settings]
+install_before = "3d"
+
 [tools]
-"github:golangci/golangci-lint" = "latest"
-"github:mfridman/tparse" = "latest"
-"github:mvdan/gofumpt" = "latest"
-"github:k1LoW/octocov" = "latest"
-"github:goreleaser/goreleaser" = "latest"
-bun = "latest"
+go = "1.26.1"
+"github:golangci/golangci-lint" = "2.11.3"
+"github:mfridman/tparse" = "0.18.0"
+"github:mvdan/gofumpt" = "0.9.2"
+"github:k1LoW/octocov" = "0.75.4"
+"github:goreleaser/goreleaser" = "2.14.3"
+bun = "1.3.11"

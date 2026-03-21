@@ -1,6 +1,6 @@
 module github.com/koh-sh/commd
 
-go 1.26.0
+go 1.26.1
 
 require (
 	github.com/AlexanderGrooff/mermaid-ascii v0.0.0-20260221123917-b5d02c35decf
