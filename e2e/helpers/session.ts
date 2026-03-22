@@ -49,6 +49,52 @@ export async function launchCommd(opts: LaunchOptions): Promise<Session> {
 
 export const FIXTURE_BASIC = "internal/markdown/testdata/basic.md";
 
+export const MOCK_PR_URL = "https://github.com/test-owner/test-repo/pull/1";
+
+export interface PRLaunchOptions {
+  prURL: string;
+  mockServerURL: string;
+  file?: string;
+  args?: string[];
+  cols?: number;
+  rows?: number;
+  env?: Record<string, string>;
+}
+
+/**
+ * Launch commd pr subcommand with a mock GitHub API server.
+ * Does NOT wait for any specific text — callers must waitForText themselves
+ * because the first screen differs (file picker vs review TUI).
+ */
+export async function launchCommdPR(
+  opts: PRLaunchOptions,
+): Promise<Session> {
+  const args = ["pr", opts.prURL];
+  if (opts.file) {
+    args.push("--file", opts.file);
+  }
+  args.push(...(opts.args ?? []));
+
+  const session = await launchTerminal({
+    command: COMMD_BIN,
+    args,
+    cols: opts.cols ?? 120,
+    rows: opts.rows ?? 36,
+    cwd: PROJECT_ROOT,
+    env: {
+      TERM: "xterm-256color",
+      CI: "true",
+      GITHUB_TOKEN: "test-token",
+      COMMD_GITHUB_API_URL: opts.mockServerURL,
+      ...opts.env,
+    },
+    waitForData: true,
+    waitForDataTimeout: 10000,
+  });
+
+  return session;
+}
+
 /**
  * Add a comment on the currently selected section.
  * Caller must position the cursor on the target section before calling.

@@ -37,6 +37,7 @@ func TestMapComment(t *testing.T) {
 				Path: "README.md",
 				Body: "**[suggestion]** Fix typo",
 				Line: 5,
+				Side: SideRight,
 			},
 		},
 		{
@@ -55,6 +56,24 @@ func TestMapComment(t *testing.T) {
 				Body:      "**[issue (blocking)]** Rewrite this section",
 				Line:      8,
 				StartLine: 5,
+				Side:      SideRight,
+			},
+		},
+		{
+			name: "custom side LEFT is preserved",
+			comment: markdown.ReviewComment{
+				SectionID: "S1",
+				Action:    markdown.ActionNote,
+				Body:      "removed line note",
+				StartLine: 5,
+				Side:      SideLeft,
+			},
+			path: "README.md",
+			want: &PRReviewComment{
+				Path: "README.md",
+				Body: "**[note]** removed line note",
+				Line: 5,
+				Side: SideLeft,
 			},
 		},
 		{
@@ -69,6 +88,7 @@ func TestMapComment(t *testing.T) {
 				Path: "README.md",
 				Body: "**[question]** Is this section needed?",
 				Line: 12,
+				Side: SideRight,
 			},
 		},
 		{
@@ -116,6 +136,9 @@ func TestMapComment(t *testing.T) {
 			}
 			if got.StartLine != tt.want.StartLine {
 				t.Errorf("StartLine = %d, want %d", got.StartLine, tt.want.StartLine)
+			}
+			if got.Side != tt.want.Side {
+				t.Errorf("Side = %q, want %q", got.Side, tt.want.Side)
 			}
 		})
 	}
@@ -215,6 +238,16 @@ func TestBuildPRReview(t *testing.T) {
 			}
 			if got.GetBody() != tt.wantBody {
 				t.Errorf("Body = %q, want %q", got.GetBody(), tt.wantBody)
+			}
+			// Verify StartLine/StartSide are set for multi-line comments.
+			if tt.name == "multi-line comment sets StartLine and StartSide" && len(got.Comments) == 1 {
+				c := got.Comments[0]
+				if c.GetStartLine() != 5 {
+					t.Errorf("StartLine = %d, want 5", c.GetStartLine())
+				}
+				if c.GetStartSide() != SideRight {
+					t.Errorf("StartSide = %q, want %q", c.GetStartSide(), SideRight)
+				}
 			}
 		})
 	}

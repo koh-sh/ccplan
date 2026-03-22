@@ -262,3 +262,33 @@ func TestNewClient(t *testing.T) {
 		t.Fatal("expected non-nil client")
 	}
 }
+
+func TestNewClientWithCustomBaseURL(t *testing.T) {
+	// Start a test server to verify requests are directed to the custom URL.
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /repos/owner/repo/pulls/1", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, map[string]any{
+			"head": map[string]any{"sha": "abc123", "ref": "feature"},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	t.Setenv("GITHUB_TOKEN", "test-token")
+	t.Setenv("COMMD_GITHUB_API_URL", srv.URL+"/")
+
+	client, err := NewClient()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify the client actually talks to the custom server.
+	ref := &PRRef{Owner: "owner", Repo: "repo", Number: 1}
+	sha, err := client.GetHeadSHA(context.Background(), ref)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sha != "abc123" {
+		t.Errorf("got SHA %q, want %q", sha, "abc123")
+	}
+}

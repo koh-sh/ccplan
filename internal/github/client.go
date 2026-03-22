@@ -26,6 +26,13 @@ func NewClient() (*Client, error) {
 	}
 
 	client := gh.NewClient(nil).WithAuthToken(token)
+	if baseURL := os.Getenv("COMMD_GITHUB_API_URL"); baseURL != "" {
+		parsed, err := client.BaseURL.Parse(baseURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid COMMD_GITHUB_API_URL %q: %w", baseURL, err)
+		}
+		client.BaseURL = parsed
+	}
 	return &Client{inner: client}, nil
 }
 
@@ -63,6 +70,7 @@ func (c *Client) GetHeadSHA(ctx context.Context, ref *PRRef) (string, error) {
 	}
 
 	sha := pr.GetHead().GetSHA()
+	// Defensive fallback: use ref name if SHA is empty.
 	if sha == "" {
 		sha = pr.GetHead().GetRef()
 	}

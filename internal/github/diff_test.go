@@ -45,6 +45,12 @@ func TestParsePatch(t *testing.T) {
 			wantTypes: []DiffLineType{DiffRemoved, DiffAdded, DiffContext, DiffContext, DiffAdded, DiffContext},
 		},
 		{
+			name:      "no newline marker is skipped",
+			patch:     "@@ -1,2 +1,2 @@\n-old\n\\ No newline at end of file\n+new\n Content",
+			wantLines: 3,
+			wantTypes: []DiffLineType{DiffRemoved, DiffAdded, DiffContext},
+		},
+		{
 			name:      "empty patch",
 			patch:     "",
 			wantLines: 0,

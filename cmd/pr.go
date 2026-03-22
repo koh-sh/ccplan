@@ -191,35 +191,25 @@ func (p *PRCmd) showFinalDialog(ctx context.Context, client *ghclient.Client, re
 }
 
 func (p *PRCmd) submitReview(ctx context.Context, client *ghclient.Client, ref *ghclient.PRRef, results []ghclient.FileReviewResult, event, body string) error {
-	// Filter out overview comments (not supported as inline PR comments)
-	for i, r := range results {
+	// Warn about overview comments (filtered by BuildPRReview/MapComment, not supported as inline PR comments)
+	for _, r := range results {
 		if r.Review == nil {
 			continue
 		}
-		var filtered []markdown.ReviewComment
 		for _, c := range r.Review.Comments {
 			if c.SectionID == markdown.OverviewSectionID {
 				fmt.Fprintf(os.Stderr, "Warning: overview comment on %s skipped (not supported as inline PR comment)\n", r.Path)
-				continue
 			}
-			filtered = append(filtered, c)
 		}
-		results[i].Review.Comments = filtered
-	}
-
-	// Check if any comments remain after filtering
-	totalComments := 0
-	for _, r := range results {
-		if r.Review != nil {
-			totalComments += len(r.Review.Comments)
-		}
-	}
-	if totalComments == 0 && body == "" && event == "COMMENT" {
-		fmt.Fprintln(os.Stderr, "No comments to submit (all were overview-level).")
-		return nil
 	}
 
 	review := ghclient.BuildPRReview(results, event, body)
+
+	// Check if any comments remain after filtering
+	if len(review.Comments) == 0 && body == "" && event == "COMMENT" {
+		fmt.Fprintln(os.Stderr, "No comments to submit (all were overview-level).")
+		return nil
+	}
 
 	if err := client.SubmitReview(ctx, ref, review); err != nil {
 		// Fallback: print review to stderr to prevent data loss
