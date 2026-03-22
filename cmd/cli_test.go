@@ -2,6 +2,11 @@ package cmd
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +14,8 @@ import (
 
 	"github.com/alecthomas/kong"
 	tea "github.com/charmbracelet/bubbletea"
+	ghclient "github.com/koh-sh/commd/internal/github"
+	"github.com/koh-sh/commd/internal/markdown"
 )
 
 func TestVersionCmdRun(t *testing.T) {
@@ -415,4 +422,209 @@ func TestLocateCmdRunStdinMode(t *testing.T) {
 	if output == "" {
 		t.Error("expected plan file path in output")
 	}
+}
+
+func TestPRCmdRunInvalidURL(t *testing.T) {
+	p := &PRCmd{URL: "not-a-url"}
+	err := p.Run()
+	if err == nil {
+		t.Fatal("expected error for invalid URL")
+	}
+}
+
+func TestPRCmdRunNoToken(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	t.Setenv("PATH", "") // disable gh CLI fallback
+	p := &PRCmd{URL: "https://github.com/owner/repo/pull/1"}
+	err := p.Run()
+	if err == nil {
+		t.Fatal("expected error when no token available")
+	}
+	if !strings.Contains(err.Error(), "GitHub token not found") {
+		t.Errorf("error = %q, want to contain 'GitHub token not found'", err.Error())
+	}
+}
+
+func TestPRCmdRunNoMDFiles(t *testing.T) {
+	srv := prTestServer(t, []map[string]string{
+		{"filename": "main.go", "status": "modified"},
+	}, "")
+
+	client := ghclient.NewClientWithHTTP(srv.Client(), srv.URL+"/")
+	p := &PRCmd{
+		URL:    "https://github.com/owner/repo/pull/1",
+		client: client,
+	}
+	err := p.Run()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPRCmdRunFileNotInPR(t *testing.T) {
+	srv := prTestServer(t, []map[string]string{
+		{"filename": "README.md", "status": "modified"},
+	}, "")
+
+	client := ghclient.NewClientWithHTTP(srv.Client(), srv.URL+"/")
+	p := &PRCmd{
+		URL:    "https://github.com/owner/repo/pull/1",
+		File:   "missing.md",
+		client: client,
+	}
+	err := p.Run()
+	if err == nil {
+		t.Fatal("expected error for missing file")
+	}
+	if !strings.Contains(err.Error(), "not found in PR") {
+		t.Errorf("error = %q, want to contain 'not found in PR'", err.Error())
+	}
+}
+
+func TestPRCmdRunWithFileFlag(t *testing.T) {
+	srv := prTestServer(t, []map[string]string{
+		{"filename": "README.md", "status": "modified"},
+	}, "# Test\n\n## Section\n\nContent.\n")
+
+	client := ghclient.NewClientWithHTTP(srv.Client(), srv.URL+"/")
+
+	// Use Ctrl+C to quit the TUI immediately
+	pr, pw, _ := os.Pipe()
+	_, _ = pw.Write([]byte{3}) // Ctrl+C
+	pw.Close()
+
+	p := &PRCmd{
+		URL:     "https://github.com/owner/repo/pull/1",
+		File:    "README.md",
+		Theme:   "dark",
+		client:  client,
+		teaOpts: []tea.ProgramOption{tea.WithInput(pr)},
+	}
+	err := p.Run()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPRCmdSubmitReviewComment(t *testing.T) {
+	srv := prTestServer(t, nil, "")
+
+	client := ghclient.NewClientWithHTTP(srv.Client(), srv.URL+"/")
+	ref := &ghclient.PRRef{Owner: "owner", Repo: "repo", Number: 1}
+
+	doc := &markdown.Document{
+		Sections: []*markdown.Section{
+			{ID: "S1", Title: "Intro", StartLine: 3, EndLine: 10},
+		},
+	}
+	results := []ghclient.FileReviewResult{{
+		Path: "README.md",
+		Doc:  doc,
+		Review: &markdown.ReviewResult{
+			Comments: []markdown.ReviewComment{
+				{SectionID: "S1", Action: markdown.ActionSuggestion, Body: "Fix typo", StartLine: 5},
+			},
+		},
+	}}
+
+	p := &PRCmd{Theme: "dark"}
+	err := p.submitReview(context.Background(), client, ref, results, "COMMENT", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPRCmdSubmitReviewApprove(t *testing.T) {
+	srv := prTestServer(t, nil, "")
+
+	client := ghclient.NewClientWithHTTP(srv.Client(), srv.URL+"/")
+	ref := &ghclient.PRRef{Owner: "owner", Repo: "repo", Number: 1}
+
+	p := &PRCmd{Theme: "dark"}
+	err := p.submitReview(context.Background(), client, ref, nil, "APPROVE", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPRCmdSubmitReviewError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /repos/owner/repo/pulls/1/reviews", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, `{"message":"error"}`, http.StatusUnprocessableEntity)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	client := ghclient.NewClientWithHTTP(srv.Client(), srv.URL+"/")
+	ref := &ghclient.PRRef{Owner: "owner", Repo: "repo", Number: 1}
+
+	doc := &markdown.Document{
+		Sections: []*markdown.Section{
+			{ID: "S1", Title: "Intro", StartLine: 3},
+		},
+	}
+	results := []ghclient.FileReviewResult{{
+		Path: "README.md",
+		Doc:  doc,
+		Review: &markdown.ReviewResult{
+			Comments: []markdown.ReviewComment{
+				{SectionID: "S1", Action: markdown.ActionNote, Body: "note"},
+			},
+		},
+	}}
+
+	p := &PRCmd{Theme: "dark"}
+	err := p.submitReview(context.Background(), client, ref, results, "COMMENT", "")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// prTestServer creates a mock GitHub API server for PR tests.
+func prTestServer(t *testing.T, files []map[string]string, fileContent string) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+
+	// List PR files
+	mux.HandleFunc("GET /repos/owner/repo/pulls/1/files", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(files); err != nil {
+			t.Fatalf("encoding files: %v", err)
+		}
+	})
+
+	// Get PR (for head SHA)
+	mux.HandleFunc("GET /repos/owner/repo/pulls/1", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"head": map[string]any{"sha": "abc123", "ref": "feature"},
+		}); err != nil {
+			t.Fatalf("encoding PR: %v", err)
+		}
+	})
+
+	// Get file contents
+	if fileContent != "" {
+		mux.HandleFunc("GET /repos/owner/repo/contents/", func(w http.ResponseWriter, _ *http.Request) {
+			encoded := base64.StdEncoding.EncodeToString([]byte(fileContent))
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(map[string]any{
+				"type": "file", "encoding": "base64", "content": encoded,
+			}); err != nil {
+				t.Fatalf("encoding content: %v", err)
+			}
+		})
+	}
+
+	// Create review
+	mux.HandleFunc("POST /repos/owner/repo/pulls/1/reviews", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{"id": 1}); err != nil {
+			t.Fatalf("encoding review: %v", err)
+		}
+	})
+
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
 }

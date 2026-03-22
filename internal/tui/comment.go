@@ -12,10 +12,11 @@ import (
 type CommentEditor struct {
 	textarea   textarea.Model
 	sectionID  string
-	labelIndex int // index into markdown.ActionLabels
-	decoIndex  int // index into markdown.DecorationLabels
-	startLine  int // 1-based start line (0 = section-level)
-	endLine    int // 1-based end line (0 = single line)
+	labelIndex int    // index into markdown.ActionLabels
+	decoIndex  int    // index into markdown.DecorationLabels
+	startLine  int    // 1-based start line (0 = section-level)
+	endLine    int    // 1-based end line (0 = single line)
+	side       string // "RIGHT" or "LEFT" (for PR diff)
 }
 
 // NewCommentEditor creates a new CommentEditor.
@@ -54,10 +55,11 @@ func (c *CommentEditor) Open(sectionID string, existing *markdown.ReviewComment)
 
 // OpenWithLines opens the comment editor for a new line-level comment.
 // existing must be nil; use Open directly when editing existing comments.
-func (c *CommentEditor) OpenWithLines(sectionID string, existing *markdown.ReviewComment, startLine, endLine int) tea.Cmd {
+func (c *CommentEditor) OpenWithLines(sectionID string, existing *markdown.ReviewComment, startLine, endLine int, side string) tea.Cmd {
 	cmd := c.Open(sectionID, existing)
 	c.startLine = startLine
 	c.endLine = endLine
+	c.side = side
 	return cmd
 }
 
@@ -145,6 +147,7 @@ func (c *CommentEditor) Result() *markdown.ReviewComment {
 		Body:       body,
 		StartLine:  c.startLine,
 		EndLine:    c.endLine,
+		Side:       c.side,
 	}
 }
 

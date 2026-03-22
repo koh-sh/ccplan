@@ -76,11 +76,21 @@ type App struct {
 	editCommentIdx int         // index of comment being edited in comment list mode (-1 = new)
 }
 
+// DiffData holds parsed diff information for PR mode display.
+type DiffData struct {
+	DisplayLines []string // formatted diff lines (with +/-/space prefix)
+	LineMap      []int    // maps display index → file line number for commenting
+	SideMap      []string // maps display index → "RIGHT" or "LEFT"
+	TypeMap      []byte   // maps display index → diff line type ('+', '-', ' ')
+}
+
 // AppOptions configures the TUI appearance.
 type AppOptions struct {
-	Theme       string // "dark" or "light"
-	FilePath    string // file path (displayed in title bar)
-	TrackViewed bool   // persist viewed state to sidecar file
+	Theme       string    // "dark" or "light"
+	FilePath    string    // file path (displayed in title bar)
+	TrackViewed bool      // persist viewed state to sidecar file
+	PRMode      bool      // PR review mode: changes dialog text and enables diff view
+	Diff        *DiffData // when set, raw view shows diff instead of full source
 }
 
 // NewApp creates a new App model.
@@ -105,7 +115,22 @@ func NewApp(doc *markdown.Document, opts AppOptions) *App {
 			Status: markdown.StatusCancelled,
 		},
 	}
-	if len(doc.SourceLines) > 0 {
+	if opts.Diff != nil {
+		// PR mode: use diff lines, start in raw view with section filtering
+		a.linePane = NewLinePane(opts.Diff.DisplayLines, 0, 0, styles, doc.AllSections())
+		a.linePane.diffLineMap = opts.Diff.LineMap
+		a.linePane.diffSideMap = opts.Diff.SideMap
+		a.linePane.diffTypeMap = opts.Diff.TypeMap
+		// Recalculate gutter width from max file line number
+		maxLine := 1
+		for _, l := range opts.Diff.LineMap {
+			if l > maxLine {
+				maxLine = l
+			}
+		}
+		a.linePane.gutterWidth = len(fmt.Sprintf("%d", maxLine)) + 1
+		a.rawView = true
+	} else if len(doc.SourceLines) > 0 {
 		a.linePane = NewLinePane(doc.SourceLines, 0, 0, styles, doc.AllSections())
 	}
 	return a
@@ -450,10 +475,13 @@ func (a *App) handleLinePaneKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.syncSectionFromLineCursor()
 		}
 	case key.Matches(msg, a.keymap.Comment):
+		if !a.linePane.CanComment() {
+			return a, nil
+		}
 		startLine, endLine := a.linePane.SelectedRange()
 		sectionID := a.linePane.SectionIDAtLine(startLine)
 		a.editCommentIdx = -1
-		cmd := a.comment.OpenWithLines(sectionID, nil, startLine, endLine)
+		cmd := a.comment.OpenWithLines(sectionID, nil, startLine, endLine, a.linePane.CursorSide())
 		a.mode = ModeComment
 		return a, cmd
 	case key.Matches(msg, a.keymap.VisualSelect):
@@ -480,10 +508,13 @@ func (a *App) handleLineSelectMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.syncSectionFromLineCursor()
 	case key.Matches(msg, a.keymap.Comment):
 		startLine, endLine := a.linePane.SelectedRange()
+		if startLine == 0 {
+			return a, nil // no valid diff line selected
+		}
 		sectionID := a.linePane.SectionIDAtLine(startLine)
 		a.linePane.CancelVisualSelect()
 		a.editCommentIdx = -1
-		cmd := a.comment.OpenWithLines(sectionID, nil, startLine, endLine)
+		cmd := a.comment.OpenWithLines(sectionID, nil, startLine, endLine, a.linePane.CursorSide())
 		a.mode = ModeComment
 		return a, cmd
 	case key.Matches(msg, a.keymap.Cancel):
@@ -864,8 +895,10 @@ func (a *App) contentHeight() int {
 	return a.contentHeightWith(a.titleBarHeight())
 }
 
+// contentHeightWith returns the pane height (including border) for the given title bar height.
+// Layout: tbHeight + \n + pane + \n + statusBar(1) = a.height
 func (a *App) contentHeightWith(tbHeight int) int {
-	return max(a.height-tbHeight-3, 1)
+	return max(a.height-tbHeight-3, 4)
 }
 
 func (a *App) resizeLeftPane(delta int) {
@@ -934,7 +967,7 @@ func (a *App) View() string {
 	rw := a.rightWidth()
 	singlePane := a.width < 80
 
-	// Left pane: clip content BEFORE applying border
+	// Left pane
 	leftContent := clipLines(a.sectionList.Render(lw, ch, a.styles), ch)
 	leftBorder := a.styles.InactiveBorder
 	if a.focus == FocusLeft {
@@ -960,7 +993,7 @@ func (a *App) View() string {
 		return pane + "\n" + a.renderStatusBar()
 	}
 
-	// Right pane: clip content BEFORE applying border
+	// Right pane
 	rightContent := clipLines(a.renderRightContent(rw, ch), ch)
 	rightBorder := a.styles.InactiveBorder
 	if a.focus == FocusRight {
@@ -973,23 +1006,31 @@ func (a *App) View() string {
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 
+	var result string
 	if titleBar != "" {
-		return titleBar + "\n" + content + "\n" + a.renderStatusBar()
+		result = titleBar + "\n" + content + "\n" + a.renderStatusBar()
+	} else {
+		result = content + "\n" + a.renderStatusBar()
 	}
-	return content + "\n" + a.renderStatusBar()
+
+	return result
 }
 
 func (a *App) renderRightContent(width, height int) string {
 	switch a.mode {
 	case ModeComment:
-		commentHeight := 7
-		detailHeight := max(height-commentHeight-2, 1)
-
 		// Show line ref in comment header when editing a line-level comment
 		commentLabel := "Comment [" + a.comment.FormatLabel() + "]"
 		if ref := a.comment.FormatLineRef(); ref != "" {
 			commentLabel += " (" + ref + ")"
 		}
+		separator := a.styles.CommentBorder.Width(width - 2).Render(commentLabel)
+		commentView := a.comment.View()
+
+		// \n between parts does not add extra lines in lipgloss.Height
+		sepHeight := lipgloss.Height(separator)
+		commentViewHeight := lipgloss.Height(commentView)
+		detailHeight := max(height-sepHeight-commentViewHeight, 1)
 
 		var detailView string
 		if a.isRawMode() {
@@ -999,8 +1040,7 @@ func (a *App) renderRightContent(width, height int) string {
 			a.detail.SetSize(width, detailHeight)
 			detailView = a.detail.View()
 		}
-		separator := a.styles.CommentBorder.Width(width - 2).Render(commentLabel)
-		return detailView + "\n" + separator + "\n" + a.comment.View()
+		return clipLines(detailView, detailHeight) + "\n" + separator + "\n" + commentView
 
 	case ModeCommentList:
 		return a.commentList.Render(width, height, a.styles)
@@ -1127,11 +1167,18 @@ func (a *App) renderConfirm() string {
 	var message string
 	switch a.confirmAction {
 	case confirmSubmit:
-		message = fmt.Sprintf("Submit review? (%d comments)", a.sectionList.TotalCommentCount())
-	case confirmQuit:
-		if a.sectionList.HasComments() {
-			message = "You have review comments.\n\nQuit without submitting?"
+		if a.opts.PRMode {
+			message = fmt.Sprintf("Finish reviewing this file? (%d comments)", a.sectionList.TotalCommentCount())
 		} else {
+			message = fmt.Sprintf("Submit review? (%d comments)", a.sectionList.TotalCommentCount())
+		}
+	case confirmQuit:
+		switch {
+		case a.opts.PRMode:
+			message = "Skip this file?"
+		case a.sectionList.HasComments():
+			message = "You have review comments.\n\nQuit without submitting?"
+		default:
 			message = "Quit review?"
 		}
 	}

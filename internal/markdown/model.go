@@ -57,6 +57,7 @@ type ReviewComment struct {
 	Body       string     // Comment body text
 	StartLine  int        // 1-based start line (0 = section-level comment)
 	EndLine    int        // 1-based end line (0 = single line if StartLine > 0)
+	Side       string     // "RIGHT" or "LEFT" (for PR diff comments)
 }
 
 // FormatLabel returns the formatted label string for display.

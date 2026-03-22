@@ -50,6 +50,29 @@ commd review --output stdout document.md
 
 When `--track-viewed` is enabled, commd saves which sections you've marked as viewed in a `.reviewed.json` sidecar file. On subsequent runs, viewed marks are restored automatically. If a section's content has changed, its viewed mark is cleared (detected via content hash).
 
+### `commd pr`
+
+Review Markdown files changed in a GitHub pull request. Comments are submitted as a GitHub PR Review with inline file comments.
+
+```bash
+# Interactive file picker for changed .md files
+commd pr https://github.com/owner/repo/pull/123
+
+# Review a specific file directly
+commd pr https://github.com/owner/repo/pull/123 --file docs/README.md
+```
+
+| Flag | Description |
+|------|-------------|
+| `--file` | Review a specific file instead of showing the file picker |
+| `--theme` | Color theme: `dark` (default), `light` |
+
+**Authentication**: Requires a GitHub token via `GITHUB_TOKEN` environment variable or `gh auth login`.
+
+**File picker**: When `--file` is not specified, an interactive file picker shows all changed `.md` files. All files are selected by default. Use `space` to toggle, `a` to select/deselect all, `enter` to confirm.
+
+**Submit behavior**: Comments are posted as a GitHub PR Review with inline comments on each file. If no comments are added, you can optionally approve the PR. Note: Overview (file-level) comments are not posted to GitHub due to API limitations — only section-level and line-level comments are submitted.
+
 ### `commd version`
 
 Show the current version.

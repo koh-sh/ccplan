@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/atotto/clipboard"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/koh-sh/commd/internal/markdown"
 	"github.com/koh-sh/commd/internal/tui"
 )
@@ -66,9 +65,7 @@ func (r *ReviewCmd) Run() error {
 		FilePath:    r.File,
 		TrackViewed: r.TrackViewed,
 	})
-	opts := append([]tea.ProgramOption{tea.WithAltScreen()}, r.teaOpts...)
-	prog := tea.NewProgram(app, opts...)
-	finalModel, err := prog.Run()
+	finalModel, err := runTea(app, r.teaOpts)
 	if err != nil {
 		return fmt.Errorf("running TUI: %w", err)
 	}
