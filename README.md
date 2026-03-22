@@ -257,8 +257,9 @@ Set `CC_PLAN_REVIEW_SKIP=1` to temporarily disable the hook.
 Dev tools are managed by [mise](https://mise.jdx.dev/). Run `mise install` to set up the toolchain (includes Go linters, formatters, and bun).
 
 ```bash
-mise run ci    # Run full CI pipeline (fmt, lint, build, test)
-mise run e2e   # Run E2E tests (builds binary, then runs bun test in e2e/)
+mise run ci         # Run full CI pipeline (fmt, fix, lint, build, cov, e2e-basic)
+mise run e2e        # Run all E2E tests (full suite)
+mise run e2e-basic  # Run basic E2E tests (critical path only, included in ci)
 ```
 
 E2E tests use [tuistory](https://github.com/remorses/tuistory) to drive the TUI in a virtual terminal.

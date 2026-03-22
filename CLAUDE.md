@@ -10,7 +10,7 @@ commd is a Go CLI tool for reviewing Markdown files in an interactive TUI. It pa
 
 **`mise run ci` must always pass.** Before finishing any code change, run `mise run ci` and confirm all steps succeed. This is non-negotiable — do not leave the codebase in a state where `mise run ci` fails.
 
-`mise run ci` runs: `fmt` → `fix` → `lint` → `build` → `cov` (test with coverage). E2E tests (`mise run e2e`) are separate and not included in `mise run ci`. If any step fails, fix it before considering the task complete.
+`mise run ci` runs: `fmt` → `fix` → `lint` → `build` → `cov` (test with coverage) → `e2e-basic` (basic E2E tests). If any step fails, fix it before considering the task complete.
 
 ## Build & Test Commands
 
@@ -20,7 +20,8 @@ Dev tools (Go, golangci-lint, tparse, gofumpt, octocov, goreleaser, bun) are man
 mise run ci                             # Run full CI pipeline (MUST pass)
 mise run build                          # Build binary
 mise run test                           # Run all tests with tparse
-mise run e2e                            # Run E2E tests with tuistory (not in ci)
+mise run e2e                            # Run all E2E tests (full suite, manual)
+mise run e2e-basic                      # Run basic E2E tests (included in ci)
 mise run lint                           # Run golangci-lint with --fix
 mise run fmt                            # Format with gofumpt
 mise run fix                            # Run go fix (modernize)
@@ -30,7 +31,7 @@ go test -v ./internal/markdown           # Run tests for a specific package
 go test -run TestParsePreamble ./internal/markdown  # Run a single test
 ```
 
-`mise run e2e` builds the binary and runs E2E tests in `e2e/` using bun + tuistory. E2E tests are not included in `mise run ci` because they require terminal automation and take longer to run.
+`mise run e2e` builds the binary and runs all E2E tests in `e2e/` using bun + tuistory (full suite). `mise run e2e-basic` runs only critical-path E2E tests and is included in `mise run ci`.
 
 Linter config: `.golangci.yml` (enabled: asciicheck, gocritic, misspell, nolintlint, predeclared, unconvert; formatters: gci, gofumpt).
 
@@ -79,6 +80,8 @@ Linter config: `.golangci.yml` (enabled: asciicheck, gocritic, misspell, nolintl
 
 - Write all tests in table-driven test format
 - Do not write meaningless tests that only exist to inflate coverage
+- When implementing or modifying features, add E2E tests in `e2e/tests/`
+- Consider the feature's criticality and add to basic tier (`.mise.toml` `e2e-basic` task) if appropriate
 
 ### Documentation
 

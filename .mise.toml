@@ -45,20 +45,27 @@ run = [
 ]
 
 [tasks.ci]
-description = "Run full CI pipeline (fmt -> fix -> lint -> build -> cov)"
+description = "Run full CI pipeline (fmt -> fix -> lint -> build -> cov -> e2e-basic)"
 run = [
     { task = "fmt" },
     { task = "fix" },
     { task = "lint" },
     { task = "build" },
     { task = "cov" },
+    { task = "e2e-basic" },
 ]
 
 [tasks.e2e]
-description = "Run E2E tests with tuistory"
+description = "Run all E2E tests with tuistory (full suite)"
 depends = ["build"]
 dir = "e2e"
 run = ["bun install", "bun test"]
+
+[tasks.e2e-basic]
+description = "Run basic E2E tests (critical path only)"
+depends = ["build"]
+dir = "e2e"
+run = ["bun install", "bun test tests/navigation.test.ts tests/comment.test.ts tests/confirm.test.ts tests/confirm-accept.test.ts tests/help.test.ts tests/search.test.ts tests/viewed.test.ts tests/pr.test.ts"]
 
 [tasks.install-skills]
 description = "Install tuistory Claude Code skill"
