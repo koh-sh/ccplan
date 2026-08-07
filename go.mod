@@ -8,7 +8,7 @@ require (
 	charm.land/glamour/v2 v2.0.1
 	charm.land/lipgloss/v2 v2.0.5
 	github.com/AlexanderGrooff/mermaid-ascii v0.0.0-20260707233647-823db562a443
-	github.com/alecthomas/kong v1.15.0
+	github.com/alecthomas/kong v1.16.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/google/go-github/v84 v84.0.0
 	github.com/mattn/go-runewidth v0.0.27
