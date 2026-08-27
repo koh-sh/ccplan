@@ -7,7 +7,7 @@ require (
 	charm.land/bubbletea/v2 v2.0.8
 	charm.land/glamour/v2 v2.0.1
 	charm.land/lipgloss/v2 v2.0.6
-	github.com/AlexanderGrooff/mermaid-ascii v0.0.0-20260707233647-823db562a443
+	github.com/AlexanderGrooff/mermaid-ascii v0.0.0-20260819200233-aa31760e14e3
 	github.com/alecthomas/kong v1.16.1
 	github.com/atotto/clipboard v0.1.4
 	github.com/google/go-github/v84 v84.0.0
