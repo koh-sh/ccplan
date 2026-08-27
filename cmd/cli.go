@@ -9,7 +9,7 @@ import (
 
 // CLI is the top-level command structure for commd.
 type CLI struct {
-	Review   ReviewCmd  `cmd:"" help:"Review a Markdown file in TUI"`
+	Review   ReviewCmd  `cmd:"" default:"withargs" help:"Review a Markdown file in TUI (default command: commd file.md)"`
 	PR       PRCmd      `cmd:"" help:"Review Markdown files in a GitHub PR"`
 	Cclocate LocateCmd  `cmd:"cclocate" help:"Locate file path from Claude Code transcript"`
 	Cchook   HookCmd    `cmd:"cchook" help:"Run as Claude Code PostToolUse hook"`

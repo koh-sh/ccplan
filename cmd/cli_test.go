@@ -630,3 +630,52 @@ func prTestServer(t *testing.T, files []map[string]string, fileContent string) *
 	t.Cleanup(srv.Close)
 	return srv
 }
+
+// TestCLIDefaultCommand verifies that `commd <file>` resolves to the review
+// subcommand (default:"withargs") while named subcommands keep precedence.
+func TestCLIDefaultCommand(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		wantCmd    string
+		wantFile   string
+		wantOutput string
+		wantErr    string
+	}{
+		{name: "explicit review", args: []string{"review", "doc.md"}, wantCmd: "review <file>", wantFile: "doc.md"},
+		{name: "implicit review", args: []string{"doc.md"}, wantCmd: "review <file>", wantFile: "doc.md"},
+		{name: "implicit review with leading flag", args: []string{"--output", "stdout", "doc.md"}, wantCmd: "review <file>", wantFile: "doc.md", wantOutput: "stdout"},
+		{name: "implicit review with trailing flag", args: []string{"doc.md", "--output", "stdout"}, wantCmd: "review <file>", wantFile: "doc.md", wantOutput: "stdout"},
+		{name: "named command takes precedence", args: []string{"version"}, wantCmd: "version"},
+		{name: "pr command", args: []string{"pr", "https://github.com/owner/repo/pull/1"}, wantCmd: "pr <url>"},
+		{name: "no args", args: nil, wantErr: `expected "<file>"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cli CLI
+			parser, err := kong.New(&cli, kong.Name("commd"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, err := parser.Parse(tt.args)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Errorf("err = %v, want to contain %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Parse(%v): %v", tt.args, err)
+			}
+			if got := ctx.Command(); got != tt.wantCmd {
+				t.Errorf("Command() = %q, want %q", got, tt.wantCmd)
+			}
+			if cli.Review.File != tt.wantFile {
+				t.Errorf("Review.File = %q, want %q", cli.Review.File, tt.wantFile)
+			}
+			if tt.wantOutput != "" && cli.Review.Output != tt.wantOutput {
+				t.Errorf("Review.Output = %q, want %q", cli.Review.Output, tt.wantOutput)
+			}
+		})
+	}
+}

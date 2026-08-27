@@ -30,9 +30,13 @@ Download the latest release from the [Releases page](https://github.com/koh-sh/c
 ### `commd review`
 
 Display a Markdown file in a 2-pane TUI and add review comments to each section.
+`review` is the default command, so the subcommand name can be omitted.
 
 ```bash
 commd review path/to/document.md
+
+# Same as above (review is the default command)
+commd path/to/document.md
 
 # Output review to a file
 commd review --output file --output-path ./review.md document.md

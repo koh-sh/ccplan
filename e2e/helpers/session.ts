@@ -10,13 +10,19 @@ export const TEST_TIMEOUT = 30000;
 export interface LaunchOptions {
   file: string;
   args?: string[];
+  /** Omit the "review" subcommand to exercise the default-command path (commd <file>). */
+  withoutSubcommand?: boolean;
   cols?: number;
   rows?: number;
   env?: Record<string, string>;
 }
 
 export async function launchCommd(opts: LaunchOptions): Promise<Session> {
-  const args = ["review", opts.file, ...(opts.args ?? [])];
+  const args = [
+    ...(opts.withoutSubcommand ? [] : ["review"]),
+    opts.file,
+    ...(opts.args ?? []),
+  ];
 
   const session = await launchTerminal({
     command: COMMD_BIN,

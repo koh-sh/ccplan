@@ -17,6 +17,14 @@ describe("Navigation", () => {
     expect(text).toContain("Auth Middleware");
   }, TEST_TIMEOUT);
 
+  test("commd <file> without review subcommand launches the TUI", async () => {
+    session = await launchCommd({ file: FIXTURE_BASIC, withoutSubcommand: true });
+    const text = await session.text();
+    expect(text).toContain("Overview");
+    expect(text).toContain("Step 1");
+    expect(text).toContain("Auth Middleware");
+  }, TEST_TIMEOUT);
+
   test("j moves cursor down", async () => {
     session = await launchCommd({ file: FIXTURE_BASIC });
     const before = await session.text();
