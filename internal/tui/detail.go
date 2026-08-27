@@ -63,6 +63,7 @@ func NewDetailPane(width, height int, theme string) *DetailPane {
 	renderer, _ := glamour.NewTermRenderer(
 		glamour.WithStyles(customStyle(theme)),
 		glamour.WithWordWrap(0),
+		glamour.WithPreservedNewLines(),
 	)
 
 	return &DetailPane{

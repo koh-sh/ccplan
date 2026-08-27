@@ -49,6 +49,7 @@ export async function launchCommd(opts: LaunchOptions): Promise<Session> {
 }
 
 export const FIXTURE_BASIC = "internal/markdown/testdata/basic.md";
+export const FIXTURE_CJK_WRAP = "internal/markdown/testdata/cjk-wrap.md";
 
 export const MOCK_PR_URL = "https://github.com/test-owner/test-repo/pull/1";
 

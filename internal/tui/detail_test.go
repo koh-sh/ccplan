@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/koh-sh/commd/internal/markdown"
+	"github.com/mattn/go-runewidth"
 )
 
 func TestNewDetailPane(t *testing.T) {
@@ -689,5 +690,61 @@ func TestInsertCommentBoxes(t *testing.T) {
 	}
 	if !strings.Contains(content, "Review Comment") {
 		t.Error("ShowAll should contain comment box header")
+	}
+}
+
+// TestRenderMarkdownWrapsToViewport verifies that the glamour output (not just
+// wrapProse) stays within the viewport width. glamour v2 replaces newlines in
+// paragraphs with spaces unless WithPreservedNewLines is set, which would undo
+// the hard breaks inserted by wrapProse.
+func TestRenderMarkdownWrapsToViewport(t *testing.T) {
+	const width = 60
+	tests := []struct {
+		name string
+		md   string
+	}{
+		{
+			"long CJK paragraph",
+			strings.Repeat("これは長い日本語の文章です。", 10),
+		},
+		{
+			"long English paragraph",
+			strings.Repeat("word ", 40),
+		},
+		{
+			"long CJK list item",
+			"- " + strings.Repeat("リスト項目の長い日本語。", 10),
+		},
+		{
+			"multiple CJK paragraphs",
+			strings.Repeat("一つ目の段落。", 10) + "\n\n" + strings.Repeat("二つ目の段落。", 10),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dp := NewDetailPane(width, 40, "dark")
+			rendered := dp.renderMarkdown(tt.md)
+			for i, line := range strings.Split(rendered, "\n") {
+				plain := ansiRe.ReplaceAllString(line, "")
+				if w := runewidth.StringWidth(plain); w > width {
+					t.Errorf("line %d width = %d, want <= %d: %q", i, w, width, plain)
+				}
+			}
+		})
+	}
+}
+
+// TestRenderMarkdownPreservesSoftLineBreaks verifies that single newlines in
+// source paragraphs are kept as line breaks instead of being joined with a
+// space, which would produce a long line for CJK text.
+func TestRenderMarkdownPreservesSoftLineBreaks(t *testing.T) {
+	dp := NewDetailPane(80, 40, "dark")
+	rendered := dp.renderMarkdown("一行目の文章\n二行目の文章\n")
+	plain := ansiRe.ReplaceAllString(rendered, "")
+	if strings.Contains(plain, "一行目の文章 二行目の文章") {
+		t.Errorf("soft line break should be preserved, got:\n%s", plain)
+	}
+	if !strings.Contains(plain, "一行目の文章\n") {
+		t.Errorf("expected newline after first line, got:\n%s", plain)
 	}
 }
