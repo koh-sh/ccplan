@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/koh-sh/commd/internal/diff"
 	"github.com/koh-sh/commd/internal/markdown"
 )
 
@@ -84,12 +85,28 @@ type DiffData struct {
 	TypeMap      []byte   // maps display index → diff line type ('+', '-', ' ')
 }
 
+// NewDiffData converts a parsed patch into the display data the raw view
+// needs. Returns nil when info is nil so callers can pass it straight to
+// AppOptions.Diff.
+func NewDiffData(info *diff.Info) *DiffData {
+	if info == nil {
+		return nil
+	}
+	lineMap, sideMap, typeMap := info.LineSideMap()
+	return &DiffData{
+		DisplayLines: info.FormatDiffLines(),
+		LineMap:      lineMap,
+		SideMap:      sideMap,
+		TypeMap:      typeMap,
+	}
+}
+
 // AppOptions configures the TUI appearance.
 type AppOptions struct {
 	Theme       string    // "dark" or "light"
 	FilePath    string    // file path (displayed in title bar)
 	TrackViewed bool      // persist viewed state to sidecar file
-	PRMode      bool      // PR review mode: changes dialog text and enables diff view
+	MultiFile   bool      // part of a multi-file flow: dialogs say "finish/skip this file" instead of "submit/quit"
 	Diff        *DiffData // when set, raw view shows diff instead of full source
 }
 
@@ -568,6 +585,12 @@ func (a *App) handleCommentMode(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, a.keymap.Save):
 		result := a.comment.Result()
 		if result != nil {
+			// Line-level comments carry the commented source text so the
+			// review output can quote it; line numbers alone go stale once
+			// the file is edited, and removed diff lines exist nowhere else.
+			if result.StartLine > 0 && a.linePane != nil {
+				result.Quote = a.linePane.SourceText(result.StartLine, result.EndLine, result.Side)
+			}
 			if a.editCommentIdx >= 0 {
 				a.sectionList.UpdateComment(a.comment.SectionID(), a.editCommentIdx, result)
 			} else {
@@ -1263,14 +1286,14 @@ func (a *App) renderConfirm() string {
 	var message string
 	switch a.confirmAction {
 	case confirmSubmit:
-		if a.opts.PRMode {
+		if a.opts.MultiFile {
 			message = fmt.Sprintf("Finish reviewing this file? (%d comments)", a.sectionList.TotalCommentCount())
 		} else {
 			message = fmt.Sprintf("Submit review? (%d comments)", a.sectionList.TotalCommentCount())
 		}
 	case confirmQuit:
 		switch {
-		case a.opts.PRMode:
+		case a.opts.MultiFile:
 			message = "Skip this file?"
 		case a.sectionList.HasComments():
 			message = "You have review comments.\n\nQuit without submitting?"

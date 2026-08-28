@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -105,7 +106,7 @@ func TestParsePatchLineNumbers(t *testing.T) {
 	}
 }
 
-func TestDiffInfoFormatDiffLines(t *testing.T) {
+func TestFormatDiffLines(t *testing.T) {
 	info := ParsePatch(`@@ -1,2 +1,2 @@
 -old
 +new
@@ -173,6 +174,123 @@ func TestLineSideMap(t *testing.T) {
 		}
 		if typeMap[i] != wantTypeMap[i] {
 			t.Errorf("typeMap[%d] = %c, want %c", i, typeMap[i], wantTypeMap[i])
+		}
+	}
+}
+
+func TestStripHeader(t *testing.T) {
+	gitPatch := strings.Join([]string{
+		"diff --git a/doc.md b/doc.md",
+		"index 1234567..89abcde 100644",
+		"--- a/doc.md",
+		"+++ b/doc.md",
+		"@@ -1,2 +1,3 @@",
+		" # Title",
+		"+added",
+		" body",
+	}, "\n")
+
+	tests := []struct {
+		name  string
+		patch string
+		want  string
+	}{
+		{
+			name:  "git diff headers are removed",
+			patch: gitPatch,
+			want:  "@@ -1,2 +1,3 @@\n # Title\n+added\n body",
+		},
+		{
+			name:  "patch already starting at hunk passes through",
+			patch: "@@ -1 +1 @@\n-a\n+b",
+			want:  "@@ -1 +1 @@\n-a\n+b",
+		},
+		{
+			name:  "no hunk header yields empty",
+			patch: "diff --git a/x b/x\nindex 0..1",
+			want:  "",
+		},
+		{
+			name:  "@@ inside header line is not a hunk start",
+			patch: "diff --git a/@@x b/@@x\n@@ -1 +1 @@\n-a\n+b",
+			want:  "@@ -1 +1 @@\n-a\n+b",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := StripHeader(tt.patch)
+			if got != tt.want {
+				t.Errorf("StripHeader() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAddedFilePatch(t *testing.T) {
+	tests := []struct {
+		name      string
+		content   string
+		wantPatch string
+		wantLines int
+	}{
+		{
+			name:      "two lines with trailing newline",
+			content:   "# Title\nbody\n",
+			wantPatch: "@@ -0,0 +1,2 @@\n+# Title\n+body\n",
+			wantLines: 2,
+		},
+		{
+			name:      "no trailing newline",
+			content:   "only",
+			wantPatch: "@@ -0,0 +1,1 @@\n+only\n",
+			wantLines: 1,
+		},
+		{
+			name:      "empty content",
+			content:   "",
+			wantPatch: "",
+			wantLines: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := AddedFilePatch([]byte(tt.content))
+			if got != tt.wantPatch {
+				t.Fatalf("AddedFilePatch() = %q, want %q", got, tt.wantPatch)
+			}
+			info := ParsePatch(got)
+			if tt.wantLines == 0 {
+				if info != nil {
+					t.Fatal("expected nil Info for empty patch")
+				}
+				return
+			}
+			if len(info.Lines) != tt.wantLines {
+				t.Fatalf("got %d lines, want %d", len(info.Lines), tt.wantLines)
+			}
+			for i, l := range info.Lines {
+				if l.Type != Added || l.NewLine != i+1 {
+					t.Errorf("line[%d] = %+v, want Added at NewLine %d", i, l, i+1)
+				}
+			}
+		})
+	}
+}
+
+func TestParsePatchCRLF(t *testing.T) {
+	info := ParsePatch("@@ -1,2 +1,2 @@\r\n ctx\r\n-old\r\n+new\r\n")
+	if info == nil {
+		t.Fatal("ParsePatch returned nil")
+	}
+	want := []string{"ctx", "old", "new"}
+	if len(info.Lines) != len(want) {
+		t.Fatalf("got %d lines, want %d", len(info.Lines), len(want))
+	}
+	for i, w := range want {
+		if info.Lines[i].Content != w {
+			t.Errorf("line[%d].Content = %q, want %q (carriage return must be stripped)", i, info.Lines[i].Content, w)
 		}
 	}
 }

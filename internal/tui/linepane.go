@@ -296,6 +296,38 @@ func (lp *LinePane) CanComment() bool {
 	return false
 }
 
+// SourceText returns the source text of the given 1-based file line range.
+// In diff mode, only lines on the given side are returned (removed lines
+// live on the LEFT side and are numbered by the old file), and the "+ "/"- "
+// display prefix is stripped. endLine 0 means a single line.
+func (lp *LinePane) SourceText(startLine, endLine int, side string) []string {
+	if startLine <= 0 {
+		return nil
+	}
+	if endLine < startLine {
+		endLine = startLine
+	}
+	if lp.diffLineMap == nil {
+		if startLine > len(lp.lines) {
+			return nil
+		}
+		return lp.lines[startLine-1 : min(endLine, len(lp.lines))]
+	}
+	var out []string
+	for i, line := range lp.diffLineMap {
+		if line < startLine || line > endLine || lp.diffSideMap[i] != side {
+			continue
+		}
+		// FormatDiffLines renders "<type> <content>"; drop the 2-cell prefix.
+		text := lp.lines[i]
+		if len(text) >= 2 {
+			text = text[2:]
+		}
+		out = append(out, text)
+	}
+	return out
+}
+
 // ScrollToLine scrolls the viewport so the given 1-based line is visible,
 // centered if possible.
 func (lp *LinePane) ScrollToLine(line int) {

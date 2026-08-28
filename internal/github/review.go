@@ -10,11 +10,7 @@ import (
 )
 
 // FileReviewResult holds the review result for a single file.
-type FileReviewResult struct {
-	Path   string
-	Doc    *markdown.Document
-	Review *markdown.ReviewResult
-}
+type FileReviewResult = markdown.FileReview
 
 // PRReviewComment represents a single inline comment on a PR.
 type PRReviewComment struct {

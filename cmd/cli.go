@@ -24,11 +24,13 @@ type HookCmd struct {
 
 // ReviewCmd is the review subcommand.
 type ReviewCmd struct {
-	File        string `arg:"" help:"Path to the Markdown file"`
-	Output      string `enum:"clipboard,stdout,file" default:"clipboard" help:"Output method (clipboard|stdout|file)"`
-	OutputPath  string `help:"File path for file output" type:"path"`
-	Theme       string `enum:"dark,light" default:"dark" help:"Color theme (dark|light)"`
-	TrackViewed bool   `help:"Persist viewed state to sidecar file for change detection across sessions"`
+	Files       []string `arg:"" optional:"" name:"file" help:"Path to the Markdown file (with --diff: zero or more changed files)"`
+	Output      string   `enum:"clipboard,stdout,file" default:"clipboard" help:"Output method (clipboard|stdout|file)"`
+	OutputPath  string   `help:"File path for file output" type:"path"`
+	Theme       string   `enum:"dark,light" default:"dark" help:"Color theme (dark|light)"`
+	TrackViewed bool     `help:"Persist viewed state to sidecar file for change detection across sessions"`
+	Diff        bool     `help:"Review local git changes in diff view; with no file, pick from changed .md files"`
+	Base        string   `help:"Git ref to diff against (default: HEAD; requires --diff)"`
 
 	teaOpts []tea.ProgramOption // for testing: override tea.NewProgram options
 }

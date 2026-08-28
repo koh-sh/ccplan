@@ -8,10 +8,15 @@ const COMMD_BIN = resolve(PROJECT_ROOT, "commd");
 export const TEST_TIMEOUT = 30000;
 
 export interface LaunchOptions {
-  file: string;
+  /** Markdown file to review. Optional for `--diff`, which can pick files itself. */
+  file?: string;
   args?: string[];
   /** Omit the "review" subcommand to exercise the default-command path (commd <file>). */
   withoutSubcommand?: boolean;
+  /** Working directory for commd (default: project root). `--diff` tests point this at a git repo. */
+  cwd?: string;
+  /** Text that marks the TUI as rendered (default: "quit" from the status bar). */
+  waitFor?: string;
   cols?: number;
   rows?: number;
   env?: Record<string, string>;
@@ -20,7 +25,7 @@ export interface LaunchOptions {
 export async function launchCommd(opts: LaunchOptions): Promise<Session> {
   const args = [
     ...(opts.withoutSubcommand ? [] : ["review"]),
-    opts.file,
+    ...(opts.file ? [opts.file] : []),
     ...(opts.args ?? []),
   ];
 
@@ -29,9 +34,11 @@ export async function launchCommd(opts: LaunchOptions): Promise<Session> {
     args,
     cols: opts.cols ?? 120,
     rows: opts.rows ?? 36,
-    cwd: PROJECT_ROOT,
+    cwd: opts.cwd ?? PROJECT_ROOT,
     env: {
       TERM: "xterm-256color",
+      // commd shells out to git for --diff; the PTY env is otherwise empty.
+      PATH: process.env.PATH ?? "",
       // Bubble Tea sends ESC[6n (Device Status Report) and ESC]11;? (background
       // color query) on startup and waits up to 5s for a response. tuistory's PTY
       // does not respond to these queries, causing a 5s delay per test. Setting
@@ -45,7 +52,7 @@ export async function launchCommd(opts: LaunchOptions): Promise<Session> {
 
   // Wait for Bubble Tea to process WindowSizeMsg and render the TUI
   try {
-    await session.waitForText("quit", { timeout: 15000 });
+    await session.waitForText(opts.waitFor ?? "quit", { timeout: 15000 });
   } catch (e) {
     session.close();
     throw e;

@@ -650,3 +650,42 @@ func TestLinePaneOverviewCommentHiddenWhenScrolled(t *testing.T) {
 		t.Errorf("overview comment should not render once scrolled past the top, got:\n%s", plain)
 	}
 }
+
+func TestLinePaneSourceText(t *testing.T) {
+	plain := []string{"one", "two", "three"}
+	// Display lines as produced by diff.Info.FormatDiffLines: "<type> <content>".
+	diffLines := []string{"  ctx", "- old a", "- old b", "+ new a", "  tail"}
+	diffLineMap := []int{1, 2, 3, 2, 3}
+	diffSideMap := []string{"RIGHT", "LEFT", "LEFT", "RIGHT", "RIGHT"}
+
+	tests := []struct {
+		name    string
+		lines   []string
+		lineMap []int
+		sideMap []string
+		start   int
+		end     int
+		side    string
+		want    []string
+	}{
+		{name: "plain single line", lines: plain, start: 2, want: []string{"two"}},
+		{name: "plain range", lines: plain, start: 1, end: 3, want: []string{"one", "two", "three"}},
+		{name: "plain end clamped to file", lines: plain, start: 3, end: 9, want: []string{"three"}},
+		{name: "plain start past end is nil", lines: plain, start: 5, want: nil},
+		{name: "zero start is nil", lines: plain, start: 0, want: nil},
+		{name: "diff right side strips prefix", lines: diffLines, lineMap: diffLineMap, sideMap: diffSideMap, start: 2, end: 3, side: "RIGHT", want: []string{"new a", "tail"}},
+		{name: "diff left side returns removed lines", lines: diffLines, lineMap: diffLineMap, sideMap: diffSideMap, start: 2, end: 3, side: "LEFT", want: []string{"old a", "old b"}},
+		{name: "diff no lines on side", lines: diffLines, lineMap: diffLineMap, sideMap: diffSideMap, start: 1, side: "LEFT", want: nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lp := NewLinePane(tt.lines, 80, 10, stylesForTheme(ThemeDark), nil)
+			lp.diffLineMap = tt.lineMap
+			lp.diffSideMap = tt.sideMap
+			got := lp.SourceText(tt.start, tt.end, tt.side)
+			if strings.Join(got, "|") != strings.Join(tt.want, "|") {
+				t.Errorf("SourceText(%d,%d,%q) = %v, want %v", tt.start, tt.end, tt.side, got, tt.want)
+			}
+		})
+	}
+}

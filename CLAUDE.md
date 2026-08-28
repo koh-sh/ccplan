@@ -48,12 +48,16 @@ Linter config: `.golangci.yml` (enabled: asciicheck, gocritic, misspell, nolintl
 - **`internal/tui/`** — Bubble Tea TUI. 2-pane layout: `SectionList` (left) + `DetailPane` (right). Mode-based state machine: `ModeNormal` → `ModeComment` → `ModeCommentList` → `ModeConfirm` → `ModeHelp` → `ModeSearch`.
 - **`internal/cclocate/`** — Plan file discovery from Claude Code transcript JSONL files. `plansDirectory` resolution chain: `.claude/settings.local.json` → `.claude/settings.json` → `~/.claude/settings.json` → `~/.claude/plans/`.
 - **`internal/cchook/`** — Claude Code hook orchestration. Parses stdin JSON, validates `permission_mode == "plan"`, resolves the plan file (`PreToolUse`/`ExitPlanMode`: injected `tool_input.planFilePath`; `PostToolUse`/`Write|Edit`: `file_path` under `plansDirectory`), spawns review in a pane, returns exit code 0 (continue) or 2 (feedback / deny ExitPlanMode).
+- **`internal/diff/`** — Unified diff parsing (`ParsePatch`, `StripHeader`, `AddedFilePatch`) shared by PR mode and local diff mode. Source-agnostic.
+- **`internal/gitdiff/`** — Local git queries for `review --diff`: changed/untracked `.md` listing and per-file patches via the `git` binary.
 - **`internal/github/`** — GitHub API client for PR operations via `google/go-github`. PR URL parsing (`ParsePRURL`), changed file listing (`ListMDFiles`), content fetching (`FetchFileContent`), and PR review submission (`SubmitReview`, `BuildPRReview`). Comment mapping from commd's `ReviewComment` to GitHub's `DraftReviewComment`.
 - **`internal/pane/`** — Terminal multiplexer abstraction. `PaneSpawner` interface with WezTerm and Direct (fallback) implementations. tmux is stub only (`ByName("tmux")` returns DirectSpawner). `AutoDetect()` tries WezTerm → Direct. WezTerm spawner uses pixel dimensions for split direction (right 50% or bottom 80%).
 
 ### Key Data Flow
 
 **Review**: `cmd/review.go` → `markdown.Parse(source)` → `tui.NewApp(doc)` → Bubble Tea loop → `markdown.FormatReview(result.Review, doc, filePath)` → clipboard/file/stdout
+
+**Diff Review**: `cmd/review.go` (`--diff`) → `gitdiff.Open()` → `ChangedMarkdownFiles()` (when no file given) → file picker → for each file: `gitdiff.FilePatch()` → `diff.ParsePatch()` → `tui.NewDiffData()` → `tui.NewApp()` (diff view) → `markdown.FormatReview` / `FormatReviews` (multi-file) → clipboard/file/stdout
 
 **PR Review**: `cmd/pr.go` → `PRCmd.Validate()` (parses URL) → `Run(client)` (client injected by Kong via `BindToProvider`) → `github.ListMDFiles()` → file picker (multi-select) → for each file: `github.FetchFileContent()` → `markdown.Parse()` → `tui.NewApp()` → `github.BuildPRReview()` → `github.SubmitReview()`
 
@@ -95,6 +99,7 @@ Linter config: `.golangci.yml` (enabled: asciicheck, gocritic, misspell, nolintl
 - **Mermaid → ASCII rendering** via `mermaid-ascii` library; fenced `\`\`\`mermaid` blocks are converted to ASCII art in the detail pane, with fallback to raw source on error
 - **Content-hash based viewed tracking** (`state.go`): sections are tracked by title → SHA-256 hash of title+body; if content changes, the viewed mark auto-clears
 - **PreToolUse (ExitPlanMode) hook** as the recommended trigger: it fires exactly once per completed plan, before Claude Code's own approval dialog, and exit 2 denies the tool with the review as the reason so Claude revises in plan mode. **PostToolUse (Write|Edit)** remains as an alternative that fires on every plan write. A Stop hook is not an option because Stop doesn't fire during plan mode
+- **Line comments carry a source quote** (`ReviewComment.Quote`) captured at save time; the output quotes it so Claude can locate the target after line numbers shift, and removed diff lines (which no longer exist in the file) stay readable
 - **Temp files for IPC** between hook process and review subprocess (which runs in a separate pane)
 - **Hook always exits 0 on error** — never breaks the Claude Code workflow; uses `CC_PLAN_REVIEW_SKIP=1` env var to disable
 

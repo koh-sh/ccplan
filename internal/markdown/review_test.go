@@ -243,3 +243,123 @@ func TestFormatReview(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatReviewLineComments(t *testing.T) {
+	doc := &Document{
+		Sections: []*Section{{ID: "S1", Title: "Step", Level: 2, StartLine: 1, EndLine: 10}},
+	}
+	tests := []struct {
+		name         string
+		comment      ReviewComment
+		wantContains []string
+		wantMissing  []string
+	}{
+		{
+			name:         "single line with quote",
+			comment:      ReviewComment{SectionID: "S1", Action: ActionIssue, Body: "Wrong.", StartLine: 5, Quote: []string{"the line"}},
+			wantContains: []string{"`L5` [issue] Wrong.\n> the line\n"},
+			wantMissing:  []string{"(removed)"},
+		},
+		{
+			name:         "removed diff line is marked",
+			comment:      ReviewComment{SectionID: "S1", Action: ActionQuestion, Body: "Why drop?", StartLine: 3, EndLine: 4, Side: "LEFT", Quote: []string{"old a", "old b"}},
+			wantContains: []string{"`L3-L4 (removed)` [question] Why drop?\n> old a\n> old b\n"},
+		},
+		{
+			name:         "long quote is elided after five lines",
+			comment:      ReviewComment{SectionID: "S1", Action: ActionNote, Body: "Range.", StartLine: 1, EndLine: 7, Quote: []string{"1", "2", "3", "4", "5", "6", "7"}},
+			wantContains: []string{"> 1\n> 2\n> 3\n> 4\n> 5\n> ...\n"},
+			wantMissing:  []string{"> 6"},
+		},
+		{
+			name:         "no quote omits blockquote",
+			comment:      ReviewComment{SectionID: "S1", Action: ActionNote, Body: "Bare.", StartLine: 2},
+			wantContains: []string{"`L2` [note] Bare.\n"},
+			wantMissing:  []string{">"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatReview(&ReviewResult{Comments: []ReviewComment{tt.comment}}, doc, "f.md")
+			for _, want := range tt.wantContains {
+				if !strings.Contains(got, want) {
+					t.Errorf("output missing %q:\n%s", want, got)
+				}
+			}
+			for _, missing := range tt.wantMissing {
+				if strings.Contains(got, missing) {
+					t.Errorf("output should not contain %q:\n%s", missing, got)
+				}
+			}
+		})
+	}
+}
+
+func TestFormatReviews(t *testing.T) {
+	docA := &Document{Sections: []*Section{{ID: "S1", Title: "Alpha", Level: 2}}}
+	docB := &Document{Sections: []*Section{{ID: "S1", Title: "Beta", Level: 2}}}
+	tests := []struct {
+		name         string
+		files        []FileReview
+		wantEmpty    bool
+		wantContains []string
+		wantMissing  []string
+	}{
+		{
+			name: "two files with comments",
+			files: []FileReview{
+				{Path: "docs/a.md", Doc: docA, Review: &ReviewResult{Comments: []ReviewComment{
+					{SectionID: "S1", Action: ActionSuggestion, Body: "Tighten."},
+				}}},
+				{Path: "docs/b.md", Doc: docB, Review: &ReviewResult{Comments: []ReviewComment{
+					{SectionID: "S1", Action: ActionIssue, Body: "Broken.", StartLine: 4, Quote: []string{"x"}},
+				}}},
+			},
+			wantContains: []string{
+				"# Review\n\nPlease review and address the following comments.\n",
+				"\n## docs/a.md\n\n### S1: Alpha\n[suggestion] Tighten.\n",
+				"\n## docs/b.md\n\n---\n\n`L4` [issue] Broken.\n> x\n",
+			},
+		},
+		{
+			name: "files without comments are omitted",
+			files: []FileReview{
+				{Path: "docs/a.md", Doc: docA, Review: &ReviewResult{}},
+				{Path: "docs/b.md", Doc: docB, Review: &ReviewResult{Comments: []ReviewComment{
+					{SectionID: "S1", Action: ActionNote, Body: "Only this."},
+				}}},
+			},
+			wantContains: []string{"## docs/b.md"},
+			wantMissing:  []string{"docs/a.md"},
+		},
+		{
+			name: "nil and empty reviews yield empty output",
+			files: []FileReview{
+				{Path: "docs/a.md", Doc: docA, Review: nil},
+				{Path: "docs/b.md", Doc: docB, Review: &ReviewResult{}},
+			},
+			wantEmpty: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatReviews(tt.files)
+			if tt.wantEmpty {
+				if got != "" {
+					t.Fatalf("expected empty output, got %q", got)
+				}
+				return
+			}
+			for _, want := range tt.wantContains {
+				if !strings.Contains(got, want) {
+					t.Errorf("output missing %q:\n%s", want, got)
+				}
+			}
+			for _, missing := range tt.wantMissing {
+				if strings.Contains(got, missing) {
+					t.Errorf("output should not contain %q:\n%s", missing, got)
+				}
+			}
+		})
+	}
+}

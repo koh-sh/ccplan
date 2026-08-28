@@ -5,7 +5,14 @@ import (
 	"strings"
 )
 
-// FormatReview formats a ReviewResult as a Markdown string.
+// maxQuoteLines caps how many quoted source lines follow a line-level
+// comment. Enough to locate the target; a long visual selection is elided.
+const maxQuoteLines = 5
+
+// reviewHeader is the opening of every review output.
+const reviewHeader = "# Review\n\n"
+
+// FormatReview formats a ReviewResult for a single file as a Markdown string.
 // Section-level comments are grouped under section headings.
 // Line-level comments are listed separately by line number.
 func FormatReview(result *ReviewResult, d *Document, filePath string) string {
@@ -18,6 +25,35 @@ func FormatReview(result *ReviewResult, d *Document, filePath string) string {
 		target = "the file"
 	}
 
+	var sb strings.Builder
+	sb.WriteString(reviewHeader)
+	fmt.Fprintf(&sb, "Please review and address the following comments on: %s\n", target)
+	writeComments(&sb, result, d, 2)
+	return sb.String()
+}
+
+// FormatReviews formats reviews for several files as one Markdown document.
+// Each file gets its own "## path" heading with section headings nested one
+// level deeper. Files without comments are omitted; returns "" if none have any.
+func FormatReviews(files []FileReview) string {
+	var sb strings.Builder
+	for _, f := range files {
+		if f.Review == nil || len(f.Review.Comments) == 0 {
+			continue
+		}
+		if sb.Len() == 0 {
+			sb.WriteString(reviewHeader)
+			sb.WriteString("Please review and address the following comments.\n")
+		}
+		fmt.Fprintf(&sb, "\n## %s\n", f.Path)
+		writeComments(&sb, f.Review, f.Doc, 3)
+	}
+	return sb.String()
+}
+
+// writeComments writes the section-level groups and line-level list for one
+// file. headingLevel is the Markdown heading level used for section groups.
+func writeComments(sb *strings.Builder, result *ReviewResult, d *Document, headingLevel int) {
 	// Separate section-level and line-level comments.
 	type group struct {
 		title    string
@@ -51,16 +87,14 @@ func FormatReview(result *ReviewResult, d *Document, filePath string) string {
 		g.comments = append(g.comments, c)
 	}
 
-	var sb strings.Builder
-	sb.WriteString("# Review\n\n")
-	fmt.Fprintf(&sb, "Please review and address the following comments on: %s\n", target)
+	heading := strings.Repeat("#", headingLevel)
 
 	// Section-level comments grouped by section
 	for _, id := range sectionOrder {
 		g := sectionGroups[id]
-		fmt.Fprintf(&sb, "\n## %s\n", g.title)
+		fmt.Fprintf(sb, "\n%s %s\n", heading, g.title)
 		for _, c := range g.comments {
-			fmt.Fprintf(&sb, "[%s] %s\n", c.FormatLabel(), c.Body)
+			fmt.Fprintf(sb, "[%s] %s\n", c.FormatLabel(), c.Body)
 		}
 	}
 
@@ -68,9 +102,31 @@ func FormatReview(result *ReviewResult, d *Document, filePath string) string {
 	if len(lineComments) > 0 {
 		sb.WriteString("\n---\n")
 		for _, c := range lineComments {
-			fmt.Fprintf(&sb, "\n`%s` [%s] %s\n", c.FormatLineRef(), c.FormatLabel(), c.Body)
+			fmt.Fprintf(sb, "\n`%s` [%s] %s\n", formatOutputLineRef(c), c.FormatLabel(), c.Body)
+			writeQuote(sb, c.Quote)
 		}
 	}
+}
 
-	return sb.String()
+// formatOutputLineRef renders the line reference for review output. Removed
+// diff lines are numbered by the old file, so they are marked to avoid being
+// read as current line numbers.
+func formatOutputLineRef(c ReviewComment) string {
+	ref := c.FormatLineRef()
+	if c.IsRemoved() {
+		ref += " (removed)"
+	}
+	return ref
+}
+
+// writeQuote writes the quoted source lines as a Markdown blockquote,
+// eliding beyond maxQuoteLines.
+func writeQuote(sb *strings.Builder, quote []string) {
+	for i, line := range quote {
+		if i == maxQuoteLines {
+			sb.WriteString("> ...\n")
+			return
+		}
+		fmt.Fprintf(sb, "> %s\n", line)
+	}
 }

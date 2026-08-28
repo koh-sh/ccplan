@@ -6,7 +6,6 @@ import (
 	"os"
 	"slices"
 
-	tea "charm.land/bubbletea/v2"
 	"github.com/koh-sh/commd/internal/diff"
 	ghclient "github.com/koh-sh/commd/internal/github"
 	"github.com/koh-sh/commd/internal/markdown"
@@ -56,20 +55,10 @@ func (p *PRCmd) Run(client *ghclient.Client) error {
 		}
 		selectedPaths = []string{p.File}
 	} else {
-		picker := tui.NewFilePicker(paths)
-		finalModel, err := runTea(picker, p.teaOpts)
-		if err != nil {
-			return fmt.Errorf("running file picker: %w", err)
+		selectedPaths, err = pickFiles(paths, p.teaOpts)
+		if err != nil || len(selectedPaths) == 0 {
+			return err
 		}
-		fp, ok := finalModel.(*tui.FilePicker)
-		if !ok {
-			return fmt.Errorf("unexpected model type: %T", finalModel)
-		}
-		result := fp.Result()
-		if result.Cancelled || len(result.SelectedFiles) == 0 {
-			return nil
-		}
-		selectedPaths = result.SelectedFiles
 	}
 
 	// Resolve head SHA once for all file fetches
@@ -96,37 +85,16 @@ func (p *PRCmd) Run(client *ghclient.Client) error {
 			continue
 		}
 
-		// Parse diff for this file
-		var diffData *tui.DiffData
-		if patch := patches[path]; patch != "" {
-			if diffInfo := diff.ParsePatch(patch); diffInfo != nil {
-				lineMap, sideMap, typeMap := diffInfo.LineSideMap()
-				diffData = &tui.DiffData{
-					DisplayLines: diffInfo.FormatDiffLines(),
-					LineMap:      lineMap,
-					SideMap:      sideMap,
-					TypeMap:      typeMap,
-				}
-			}
-		}
-
 		app := tui.NewApp(doc, tui.AppOptions{
-			Theme:    p.Theme,
-			FilePath: path,
-			PRMode:   true,
-			Diff:     diffData,
+			Theme:     p.Theme,
+			FilePath:  path,
+			MultiFile: true,
+			Diff:      tui.NewDiffData(diff.ParsePatch(patches[path])),
 		})
-		finalModel, err := runTea(app, p.teaOpts)
+		appResult, err := runReviewApp(app, p.teaOpts)
 		if err != nil {
-			return fmt.Errorf("running TUI for %s: %w", path, err)
+			return fmt.Errorf("%s: %w", path, err)
 		}
-
-		reviewApp, ok := finalModel.(*tui.App)
-		if !ok {
-			return fmt.Errorf("unexpected model type: %T", finalModel)
-		}
-
-		appResult := reviewApp.Result()
 
 		// Submitted or Approved = done with this file, Cancelled = skipped
 		if appResult.Status == markdown.StatusSubmitted || appResult.Status == markdown.StatusApproved {
@@ -228,16 +196,4 @@ func (p *PRCmd) submitReview(ctx context.Context, client *ghclient.Client, ref *
 		fmt.Fprintf(os.Stderr, "Review submitted to PR #%d.\n", ref.Number)
 	}
 	return nil
-}
-
-// runTea creates and runs a Bubble Tea program with alt screen and optional extra options.
-// Alt screen mode is set via the View.AltScreen field in each model's View() method.
-func runTea(model tea.Model, extraOpts []tea.ProgramOption) (tea.Model, error) {
-	// Reset Line Feed/New Line Mode (LNM) so bare LF moves cursor down without
-	// resetting the column. The renderer's cursor-down-and-back diff updates
-	// rely on this; some terminal emulators default LNM to on, which makes
-	// those updates land at the wrong column. VT100-compliant terminals already
-	// have LNM off, so this is a no-op there.
-	fmt.Print("\x1b[20l")
-	return tea.NewProgram(model, extraOpts...).Run()
 }

@@ -18,10 +18,11 @@ const (
 	Removed LineType = '-'
 )
 
-// Side constants for GitHub PR review comments.
+// Side constants identify which side of a diff a line belongs to. They match
+// the values GitHub's PR review API expects.
 const (
-	SideRight = "RIGHT"
-	SideLeft  = "LEFT"
+	SideRight = "RIGHT" // new file (added and context lines)
+	SideLeft  = "LEFT"  // old file (removed lines)
 )
 
 // Line represents a single line in a unified diff.
@@ -32,12 +33,14 @@ type Line struct {
 	OldLine int    // 1-based line number in the old file (0 for added lines)
 }
 
-// Info contains parsed diff data for a PR file.
+// Info contains parsed diff data for a single file.
 type Info struct {
 	Lines []Line
 }
 
-// ParsePatch parses a unified diff patch string into Info.
+// ParsePatch parses a unified diff patch string into Info. The patch must
+// start at the first hunk header (see StripHeader for git output). Returns
+// nil for an empty patch.
 func ParsePatch(patch string) *Info {
 	if patch == "" {
 		return nil
@@ -49,6 +52,9 @@ func ParsePatch(patch string) *Info {
 	var newLine, oldLine int
 
 	for _, line := range lines {
+		// CRLF files diff with "\r\n" line endings; keep the "\r" out of
+		// Content so it never reaches the display or the quoted output.
+		line = strings.TrimSuffix(line, "\r")
 		if strings.HasPrefix(line, "@@") {
 			newLine, oldLine = parseHunkHeader(line)
 			continue
@@ -94,6 +100,43 @@ func ParsePatch(patch string) *Info {
 	}
 
 	return info
+}
+
+// StripHeader removes everything before the first hunk header ("@@"). Local
+// `git diff` output starts with "diff --git", "index", "---", and "+++" lines
+// that ParsePatch would otherwise misread as removed/added content. GitHub's
+// API patches already start at the first hunk, so they pass through unchanged.
+func StripHeader(patch string) string {
+	idx := strings.Index(patch, "@@")
+	if idx < 0 {
+		return ""
+	}
+	// Only treat "@@" as a hunk header when it starts a line.
+	if idx > 0 && patch[idx-1] != '\n' {
+		nl := strings.Index(patch[idx:], "\n@@")
+		if nl < 0 {
+			return ""
+		}
+		idx += nl + 1
+	}
+	return patch[idx:]
+}
+
+// AddedFilePatch builds a patch that marks every line of content as added.
+// Used for untracked files, which have no git diff but should still be
+// reviewable in the diff view.
+func AddedFilePatch(content []byte) string {
+	text := strings.TrimSuffix(string(content), "\n")
+	if text == "" {
+		return ""
+	}
+	lines := strings.Split(text, "\n")
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "@@ -0,0 +1,%d @@\n", len(lines))
+	for _, l := range lines {
+		sb.WriteString("+" + l + "\n")
+	}
+	return sb.String()
 }
 
 // FormatDiffLines returns display strings for the diff lines with +/-/space prefix.

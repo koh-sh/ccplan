@@ -1,6 +1,10 @@
 package markdown
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/koh-sh/commd/internal/diff"
+)
 
 // OverviewSectionID is the virtual section ID used for file-level comments on the overview/preamble.
 const OverviewSectionID = "overview"
@@ -57,7 +61,20 @@ type ReviewComment struct {
 	Body       string     // Comment body text
 	StartLine  int        // 1-based start line (0 = section-level comment)
 	EndLine    int        // 1-based end line (0 = single line if StartLine > 0)
-	Side       string     // "RIGHT" or "LEFT" (for PR diff comments)
+	Side       string     // "RIGHT" or "LEFT" (for diff comments)
+	Quote      []string   // source text of the commented lines (line-level only)
+}
+
+// IsRemoved reports whether the comment targets removed (old-side) diff lines.
+func (c *ReviewComment) IsRemoved() bool {
+	return c.Side == diff.SideLeft
+}
+
+// FileReview pairs a reviewed file with its parsed document and comments.
+type FileReview struct {
+	Path   string
+	Doc    *Document
+	Review *ReviewResult
 }
 
 // FormatLabel returns the formatted label string for display.

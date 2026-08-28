@@ -43,6 +43,12 @@ commd review --output file --output-path ./review.md document.md
 
 # Output to stdout
 commd review --output stdout document.md
+
+# Review local git changes in diff view (working tree vs HEAD)
+commd review --diff document.md
+
+# Pick from all changed/untracked .md files, comparing against a branch
+commd review --diff --base main
 ```
 
 | Flag | Description |
@@ -51,8 +57,20 @@ commd review --output stdout document.md
 | `--output-path` | File path for `--output file` |
 | `--theme` | Color theme: `dark` (default), `light` |
 | `--track-viewed` | Persist viewed state to sidecar file (`.reviewed.json`) for change detection across sessions |
+| `--diff` | Review local git changes in diff view. Without a file, pick from changed `.md` files |
+| `--base` | Git ref to diff against (default: `HEAD`; requires `--diff`) |
 
 When `--track-viewed` is enabled, commd saves which sections you've marked as viewed in a `.reviewed.json` sidecar file. On subsequent runs, viewed marks are restored automatically. If a section's content has changed, its viewed mark is cleared (detected via content hash).
+
+#### Diff mode
+
+`--diff` reviews what changed in the working tree instead of the whole file — for example, docs that Claude Code edited, before you commit them. It uses the same diff view as `commd pr`:
+
+- The right pane opens in raw view showing the unified diff (`+`/`-` lines); press `r` for the rendered working-tree content
+- Press `Tab` to focus the diff pane, then comment on added, removed, or context lines with `c` / `V`; section comments work in the rendered view
+- Without a file argument, all changed and untracked `.md` files under the current directory are offered in a file picker and reviewed one by one; comments are combined into a single output
+- Untracked files are shown as entirely added; unchanged files are skipped
+- `--track-viewed` is not available in diff mode
 
 ### `commd pr`
 
@@ -156,7 +174,7 @@ Fenced `` ```mermaid `` code blocks are automatically converted to ASCII art in 
 Press `r` to switch the right pane to raw source view with line numbers. In this mode:
 
 - **Line-level commenting**: Press `c` to comment on the cursor line
-- **Visual selection**: Press `V`, move with `j`/`k` to select a range, then `c` to comment. In diff mode (PR reviews), a selection spanning both sides is automatically restricted to the cursor's side (old or new file lines) to satisfy GitHub's single-side comment requirement
+- **Visual selection**: Press `V`, move with `j`/`k` to select a range, then `c` to comment. In diff mode (`commd pr` and `--diff`), a selection spanning both sides is automatically restricted to the cursor's side (old or new file lines) to satisfy GitHub's single-side comment requirement
 - **Section navigation**: `j`/`k` at the edge of a section automatically moves to the adjacent section
 - Press `f` to toggle between section view (only selected section's lines) and full file view
 - Press `r` again to return to rendered view
@@ -184,11 +202,15 @@ Please review and address the following comments on: /path/to/document.md
 ---
 
 `L15` [question] Is this variable used?
+> const token = parseToken(header)
 
 `L20-L25` [suggestion] Extract this block into a helper function.
+> if err := validate(input); err != nil {
+>     return err
+> }
 ```
 
-Section-level comments (including Overview for the preamble) are grouped under section headings. Line-level comments appear below a `---` divider with inline code line references.
+Section-level comments (including Overview for the preamble) are grouped under section headings. Line-level comments appear below a `---` divider with inline code line references, followed by a quote of the commented source (up to 5 lines) so the target can still be found after the file changes. In diff mode, comments on removed lines are numbered by the old file and marked `(removed)`. When several files are reviewed with `--diff`, each file gets its own `## path` heading with section headings nested below it.
 
 Labels: `suggestion`, `issue`, `question` (default), `nitpick`, `todo`, `thought`, `note`, `praise`, `chore`
 

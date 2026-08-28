@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -58,10 +59,17 @@ func TestCommandValidate(t *testing.T) {
 		{name: "locate stdin", cmd: &LocateCmd{Stdin: true}},
 
 		// ReviewCmd: requires --output-path when --output=file.
-		{name: "review file with path", cmd: &ReviewCmd{Output: "file", OutputPath: "any/path"}},
-		{name: "review file without path", cmd: &ReviewCmd{Output: "file"}, wantErr: "--output-path is required"},
-		{name: "review stdout", cmd: &ReviewCmd{Output: "stdout"}},
-		{name: "review clipboard", cmd: &ReviewCmd{Output: "clipboard"}},
+		{name: "review file with path", cmd: &ReviewCmd{Files: []string{"any.md"}, Output: "file", OutputPath: "any/path"}},
+		{name: "review file without path", cmd: &ReviewCmd{Files: []string{"any.md"}, Output: "file"}, wantErr: "--output-path is required"},
+		{name: "review stdout", cmd: &ReviewCmd{Files: []string{"any.md"}, Output: "stdout"}},
+		{name: "review clipboard", cmd: &ReviewCmd{Files: []string{"any.md"}, Output: "clipboard"}},
+		// ReviewCmd: exactly one <file> unless --diff; --base and --track-viewed are mode-specific.
+		{name: "review no file", cmd: &ReviewCmd{Output: "stdout"}, wantErr: "expected exactly one <file>"},
+		{name: "review two files", cmd: &ReviewCmd{Files: []string{"a.md", "b.md"}, Output: "stdout"}, wantErr: "expected exactly one <file>"},
+		{name: "review base without diff", cmd: &ReviewCmd{Files: []string{"a.md"}, Output: "stdout", Base: "main"}, wantErr: "--base requires --diff"},
+		{name: "review diff no file", cmd: &ReviewCmd{Diff: true, Output: "stdout"}},
+		{name: "review diff many files", cmd: &ReviewCmd{Diff: true, Files: []string{"a.md", "b.md"}, Output: "stdout", Base: "main"}},
+		{name: "review diff with track-viewed", cmd: &ReviewCmd{Diff: true, TrackViewed: true, Output: "stdout"}, wantErr: "--track-viewed cannot be combined with --diff"},
 
 		// PRCmd: requires a parseable GitHub PR URL.
 		{name: "pr valid url", cmd: &PRCmd{URL: "https://github.com/owner/repo/pull/1"}},
@@ -272,7 +280,7 @@ func TestWriteReviewOutput(t *testing.T) {
 
 func TestReviewCmdRunFileNotFound(t *testing.T) {
 	r := &ReviewCmd{
-		File: "/nonexistent/path/plan.md",
+		Files: []string{"/nonexistent/path/plan.md"},
 	}
 	err := r.Run()
 	if err == nil {
@@ -332,7 +340,7 @@ func TestReviewCmdRunNoTerminal(t *testing.T) {
 	pw.Close()
 
 	r := &ReviewCmd{
-		File:    planFile,
+		Files:   []string{planFile},
 		Output:  "stdout",
 		teaOpts: []tea.ProgramOption{tea.WithInput(pr)},
 	}
@@ -646,9 +654,11 @@ func TestCLIDefaultCommand(t *testing.T) {
 		{name: "implicit review", args: []string{"doc.md"}, wantCmd: "review <file>", wantFile: "doc.md"},
 		{name: "implicit review with leading flag", args: []string{"--output", "stdout", "doc.md"}, wantCmd: "review <file>", wantFile: "doc.md", wantOutput: "stdout"},
 		{name: "implicit review with trailing flag", args: []string{"doc.md", "--output", "stdout"}, wantCmd: "review <file>", wantFile: "doc.md", wantOutput: "stdout"},
+		{name: "implicit diff review without file", args: []string{"--diff"}, wantCmd: "review"},
+		{name: "diff review with files", args: []string{"review", "--diff", "a.md", "b.md"}, wantCmd: "review <file>", wantFile: "a.md,b.md"},
 		{name: "named command takes precedence", args: []string{"version"}, wantCmd: "version"},
 		{name: "pr command", args: []string{"pr", "https://github.com/owner/repo/pull/1"}, wantCmd: "pr <url>"},
-		{name: "no args", args: nil, wantErr: `expected "<file>"`},
+		{name: "no args", args: nil, wantErr: "expected exactly one <file>"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -670,11 +680,104 @@ func TestCLIDefaultCommand(t *testing.T) {
 			if got := ctx.Command(); got != tt.wantCmd {
 				t.Errorf("Command() = %q, want %q", got, tt.wantCmd)
 			}
-			if cli.Review.File != tt.wantFile {
-				t.Errorf("Review.File = %q, want %q", cli.Review.File, tt.wantFile)
+			if got := strings.Join(cli.Review.Files, ","); got != tt.wantFile {
+				t.Errorf("Review.Files = %q, want %q", got, tt.wantFile)
 			}
 			if tt.wantOutput != "" && cli.Review.Output != tt.wantOutput {
 				t.Errorf("Review.Output = %q, want %q", cli.Review.Output, tt.wantOutput)
+			}
+		})
+	}
+}
+
+// initGitRepo creates a git repository with doc.md committed and returns its path.
+func initGitRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		c := exec.Command("git", args...)
+		c.Dir = dir
+		c.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.com",
+			"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.com",
+		)
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init", "-q")
+	if err := os.WriteFile(filepath.Join(dir, "doc.md"), []byte("# Doc\n\n## S\n\nold\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "-A")
+	run("commit", "-q", "--no-verify", "-m", "chore: init")
+	return dir
+}
+
+func TestReviewCmdRunDiff(t *testing.T) {
+	// Ctrl+C quits the TUI immediately when it does open.
+	ctrlC := func() []tea.ProgramOption {
+		pr, pw, _ := os.Pipe()
+		_, _ = pw.Write([]byte{3})
+		pw.Close()
+		return []tea.ProgramOption{tea.WithInput(pr)}
+	}
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T) string // returns working directory
+		cmd     ReviewCmd
+		wantErr string
+	}{
+		{
+			name:    "not a git repository",
+			setup:   func(t *testing.T) string { return t.TempDir() },
+			cmd:     ReviewCmd{Diff: true, Files: []string{"doc.md"}, Output: "stdout"},
+			wantErr: "not a git repository",
+		},
+		{
+			name:    "unknown base ref",
+			setup:   initGitRepo,
+			cmd:     ReviewCmd{Diff: true, Base: "no-such-ref", Files: []string{"doc.md"}, Output: "stdout"},
+			wantErr: "unknown git ref",
+		},
+		{
+			name:  "unchanged file is skipped without error",
+			setup: initGitRepo,
+			cmd:   ReviewCmd{Diff: true, Files: []string{"doc.md"}, Output: "stdout"},
+		},
+		{
+			name: "changed file opens the TUI",
+			setup: func(t *testing.T) string {
+				dir := initGitRepo(t)
+				if err := os.WriteFile(filepath.Join(dir, "doc.md"), []byte("# Doc\n\n## S\n\nnew\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				return dir
+			},
+			cmd: ReviewCmd{Diff: true, Files: []string{"doc.md"}, Output: "stdout"},
+		},
+		{
+			name:  "no changed files without explicit file",
+			setup: initGitRepo,
+			cmd:   ReviewCmd{Diff: true, Output: "stdout"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Chdir(tt.setup(t))
+			r := tt.cmd
+			r.teaOpts = ctrlC()
+			err := r.Run()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("err = %v, want to contain %q", err, tt.wantErr)
 			}
 		})
 	}

@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/koh-sh/commd/internal/diff"
 	"github.com/koh-sh/commd/internal/markdown"
 )
 
@@ -1974,4 +1975,68 @@ func TestAppViewedState(t *testing.T) {
 			t.Error("should start with empty sections")
 		}
 	})
+}
+
+func TestNewDiffData(t *testing.T) {
+	tests := []struct {
+		name  string
+		patch string
+		want  *DiffData
+	}{
+		{name: "nil info yields nil", patch: "", want: nil},
+		{
+			name:  "maps lines, sides, and types",
+			patch: "@@ -1,2 +1,2 @@\n ctx\n-old\n+new",
+			want: &DiffData{
+				DisplayLines: []string{"  ctx", "- old", "+ new"},
+				LineMap:      []int{1, 2, 2},
+				SideMap:      []string{"RIGHT", "LEFT", "RIGHT"},
+				TypeMap:      []byte{' ', '-', '+'},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NewDiffData(diff.ParsePatch(tt.patch))
+			if tt.want == nil {
+				if got != nil {
+					t.Fatalf("expected nil, got %+v", got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatal("expected DiffData, got nil")
+			}
+			if fmt.Sprint(got.DisplayLines) != fmt.Sprint(tt.want.DisplayLines) ||
+				fmt.Sprint(got.LineMap) != fmt.Sprint(tt.want.LineMap) ||
+				fmt.Sprint(got.SideMap) != fmt.Sprint(tt.want.SideMap) ||
+				string(got.TypeMap) != string(tt.want.TypeMap) {
+				t.Errorf("NewDiffData() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAppLineCommentCarriesQuote verifies that saving a line-level comment
+// attaches the commented source text for the review output.
+func TestAppLineCommentCarriesQuote(t *testing.T) {
+	doc, err := markdown.Parse([]byte("# T\n\n## S\n\nline four\nline five\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := NewApp(doc, AppOptions{})
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+	app.comment.OpenWithLines("S1", nil, 5, 0, "")
+	app.mode = ModeComment
+	app.comment.textarea.SetValue("check this")
+	app.handleCommentMode(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+
+	comments := app.sectionList.GetComments("S1")
+	if len(comments) != 1 {
+		t.Fatalf("got %d comments, want 1", len(comments))
+	}
+	// Source line 5 is "line four" (lines: "# T", "", "## S", "", "line four", "line five").
+	if got := strings.Join(comments[0].Quote, "|"); got != "line four" {
+		t.Errorf("Quote = %q, want %q", got, "line four")
+	}
 }
