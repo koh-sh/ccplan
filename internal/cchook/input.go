@@ -11,8 +11,15 @@ import (
 // permissionModePlan is the Claude Code permission mode that triggers plan review.
 const permissionModePlan = "plan"
 
-// Input represents the JSON input from a Claude Code PostToolUse hook.
-// It embeds cclocate.HookInput for the common fields (session_id, transcript_path, cwd).
+// Hook event and tool names that identify the ExitPlanMode trigger.
+const (
+	eventPreToolUse  = "PreToolUse"
+	toolExitPlanMode = "ExitPlanMode"
+)
+
+// Input represents the JSON input from a Claude Code tool hook (PreToolUse
+// or PostToolUse). It embeds cclocate.HookInput for the common fields
+// (session_id, transcript_path, cwd).
 type Input struct {
 	cclocate.HookInput
 	HookEventName  string     `json:"hook_event_name"`
@@ -21,9 +28,12 @@ type Input struct {
 	ToolInput      *ToolInput `json:"tool_input"`
 }
 
-// ToolInput represents the input parameters of a Write tool call.
+// ToolInput holds the tool parameters commd cares about. FilePath comes from
+// Write/Edit calls; PlanFilePath is injected by Claude Code into ExitPlanMode
+// calls (the plan is already on disk when the tool is invoked).
 type ToolInput struct {
-	FilePath string `json:"file_path"`
+	FilePath     string `json:"file_path"`
+	PlanFilePath string `json:"planFilePath"`
 }
 
 // ParseInput reads and parses hook JSON input from a reader.

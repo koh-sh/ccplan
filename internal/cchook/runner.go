@@ -26,15 +26,8 @@ func Run(input *Input, cfg RunConfig) (int, error) {
 		return 0, nil
 	}
 
-	// Determine plan file from tool_input
-	if input.ToolInput == nil || input.ToolInput.FilePath == "" {
-		return 0, nil
-	}
-	planFile := input.ToolInput.FilePath
-
-	// Check if file is under plans directory
-	plansDir := cclocate.ResolvePlansDir(input.CWD)
-	if !cclocate.IsUnderDir(planFile, plansDir) {
+	planFile, ok := resolvePlanFile(input)
+	if !ok {
 		return 0, nil
 	}
 
@@ -96,4 +89,31 @@ func Run(input *Input, cfg RunConfig) (int, error) {
 	}
 
 	return 0, nil
+}
+
+// resolvePlanFile determines which plan file to review from the hook input.
+//
+// PreToolUse on ExitPlanMode: Claude Code injects planFilePath, which is
+// authoritative, so no plansDirectory lookup is needed.
+//
+// PostToolUse on Write/Edit: the written file must be under plansDirectory to
+// count as a plan.
+//
+// Returns false when the input does not identify a plan file.
+func resolvePlanFile(input *Input) (string, bool) {
+	if input.ToolInput == nil {
+		return "", false
+	}
+	if input.HookEventName == eventPreToolUse && input.ToolName == toolExitPlanMode {
+		return input.ToolInput.PlanFilePath, input.ToolInput.PlanFilePath != ""
+	}
+	planFile := input.ToolInput.FilePath
+	if planFile == "" {
+		return "", false
+	}
+	plansDir := cclocate.ResolvePlansDir(input.CWD)
+	if !cclocate.IsUnderDir(planFile, plansDir) {
+		return "", false
+	}
+	return planFile, true
 }

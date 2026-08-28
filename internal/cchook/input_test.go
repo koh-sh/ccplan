@@ -188,3 +188,34 @@ func TestParseInput(t *testing.T) {
 		})
 	}
 }
+
+func TestParseInputExitPlanMode(t *testing.T) {
+	// PreToolUse payload as injected by Claude Code for ExitPlanMode: the
+	// model's tool_input is empty, so plan and planFilePath are added.
+	json := `{
+		"session_id": "abc",
+		"transcript_path": "/home/user/.claude/projects/p/s.jsonl",
+		"cwd": "/home/user/proj",
+		"hook_event_name": "PreToolUse",
+		"permission_mode": "plan",
+		"tool_name": "ExitPlanMode",
+		"tool_use_id": "toolu_01",
+		"tool_input": {
+			"plan": "# Plan\n\n- step",
+			"planFilePath": "/home/user/.claude/plans/my-plan.md"
+		}
+	}`
+	got, err := ParseInput(strings.NewReader(json))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HookEventName != "PreToolUse" || got.ToolName != "ExitPlanMode" {
+		t.Errorf("event/tool = %q/%q, want PreToolUse/ExitPlanMode", got.HookEventName, got.ToolName)
+	}
+	if got.ToolInput == nil || got.ToolInput.PlanFilePath != "/home/user/.claude/plans/my-plan.md" {
+		t.Errorf("PlanFilePath = %v, want plan path", got.ToolInput)
+	}
+	if got.ToolInput.FilePath != "" {
+		t.Errorf("FilePath = %q, want empty", got.ToolInput.FilePath)
+	}
+}

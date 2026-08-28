@@ -294,3 +294,151 @@ func TestRunReviewFileRemoved(t *testing.T) {
 		t.Errorf("exit code = %d, want 0", code)
 	}
 }
+
+func TestResolvePlanFile(t *testing.T) {
+	_, planFile, cwd := setupPlanEnv(t)
+	outside := filepath.Join(t.TempDir(), "elsewhere.md")
+
+	tests := []struct {
+		name   string
+		input  *Input
+		want   string
+		wantOK bool
+	}{
+		{
+			name:   "nil tool_input",
+			input:  &Input{HookInput: cclocate.HookInput{CWD: cwd}},
+			wantOK: false,
+		},
+		{
+			name: "PreToolUse ExitPlanMode uses planFilePath without plansDirectory lookup",
+			input: &Input{
+				HookInput:     cclocate.HookInput{CWD: cwd},
+				HookEventName: "PreToolUse",
+				ToolName:      "ExitPlanMode",
+				ToolInput:     &ToolInput{PlanFilePath: outside},
+			},
+			want:   outside,
+			wantOK: true,
+		},
+		{
+			name: "PreToolUse ExitPlanMode with empty planFilePath",
+			input: &Input{
+				HookInput:     cclocate.HookInput{CWD: cwd},
+				HookEventName: "PreToolUse",
+				ToolName:      "ExitPlanMode",
+				ToolInput:     &ToolInput{},
+			},
+			wantOK: false,
+		},
+		{
+			name: "PreToolUse ExitPlanMode ignores file_path",
+			input: &Input{
+				HookInput:     cclocate.HookInput{CWD: cwd},
+				HookEventName: "PreToolUse",
+				ToolName:      "ExitPlanMode",
+				ToolInput:     &ToolInput{FilePath: planFile},
+			},
+			wantOK: false,
+		},
+		{
+			name: "PostToolUse Write under plansDirectory",
+			input: &Input{
+				HookInput:     cclocate.HookInput{CWD: cwd},
+				HookEventName: "PostToolUse",
+				ToolName:      "Write",
+				ToolInput:     &ToolInput{FilePath: planFile},
+			},
+			want:   planFile,
+			wantOK: true,
+		},
+		{
+			name: "PostToolUse Write outside plansDirectory",
+			input: &Input{
+				HookInput:     cclocate.HookInput{CWD: cwd},
+				HookEventName: "PostToolUse",
+				ToolName:      "Write",
+				ToolInput:     &ToolInput{FilePath: outside},
+			},
+			wantOK: false,
+		},
+		{
+			name: "PostToolUse Write with empty file_path",
+			input: &Input{
+				HookInput:     cclocate.HookInput{CWD: cwd},
+				HookEventName: "PostToolUse",
+				ToolName:      "Write",
+				ToolInput:     &ToolInput{},
+			},
+			wantOK: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := resolvePlanFile(tt.input)
+			if ok != tt.wantOK {
+				t.Fatalf("ok = %v, want %v (got %q)", ok, tt.wantOK, got)
+			}
+			if ok && got != tt.want {
+				t.Errorf("planFile = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRunExitPlanModeTrigger verifies the PreToolUse/ExitPlanMode path end to
+// end: the injected planFilePath is reviewed even though it is not under the
+// resolved plansDirectory, and a submitted review yields exit code 2.
+func TestRunExitPlanModeTrigger(t *testing.T) {
+	planFile := filepath.Join(t.TempDir(), "plan.md")
+	if err := os.WriteFile(planFile, []byte("# Plan\n## S1\nStep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name     string
+		review   string
+		wantCode int
+	}{
+		{name: "submitted review returns 2", review: "review feedback", wantCode: 2},
+		{name: "approved (empty review) returns 0", review: "", wantCode: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var reviewedFile string
+			mock := &mockSpawner{
+				available: true,
+				name:      "mock",
+				spawnFunc: func(_ string, args []string) error {
+					reviewedFile = args[len(args)-1]
+					for i, arg := range args {
+						if arg == "--output-path" && i+1 < len(args) {
+							return os.WriteFile(args[i+1], []byte(tt.review), 0o644)
+						}
+					}
+					return fmt.Errorf("--output-path not found in args")
+				},
+			}
+			input := &Input{
+				HookInput:      cclocate.HookInput{CWD: t.TempDir()},
+				HookEventName:  "PreToolUse",
+				PermissionMode: "plan",
+				ToolName:       "ExitPlanMode",
+				ToolInput:      &ToolInput{PlanFilePath: planFile},
+			}
+			code, err := Run(input, RunConfig{Spawner: mock, Theme: "dark"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if code != tt.wantCode {
+				t.Errorf("exit code = %d, want %d", code, tt.wantCode)
+			}
+			if !mock.spawnCalled {
+				t.Fatal("spawner should be called for ExitPlanMode trigger")
+			}
+			if reviewedFile != planFile {
+				t.Errorf("reviewed file = %q, want %q", reviewedFile, planFile)
+			}
+		})
+	}
+}

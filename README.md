@@ -196,11 +196,14 @@ Decorations: `non-blocking`, `blocking`, `if-minor` — cycle with `Ctrl+D` in c
 
 ## Claude Code Integration
 
-commd can be used as a Claude Code PostToolUse hook to review plan files interactively during plan mode.
+commd can be used as a Claude Code hook to review plan files interactively during plan mode.
 
 ### `commd cchook`
 
-Run as a Claude Code PostToolUse (Write|Edit) hook. Detects writes to plan files and launches the review TUI to enable a feedback loop.
+Run as a Claude Code hook. Launches the review TUI for the plan file to enable a feedback loop. Two trigger points are supported:
+
+- **`PreToolUse` on `ExitPlanMode`** (recommended): fires once, when Claude has finished the plan and asks to leave plan mode. Claude Code injects the plan file path (`tool_input.planFilePath`), so no `plansDirectory` lookup is involved. Intermediate edits to the plan do not open a review.
+- **`PostToolUse` on `Write|Edit`**: fires on every write to a file under `plansDirectory`, including edits made before the plan is complete.
 
 ```bash
 # Called automatically by Claude Code hook (no manual invocation needed)
@@ -216,7 +219,7 @@ commd cchook
 
 ### `commd cclocate`
 
-Locate plan file paths from a Claude Code transcript JSONL. This command is primarily used internally by `commd cchook` to resolve plan file paths during hook execution.
+Locate plan file paths from a Claude Code transcript JSONL. Useful for debugging the `PostToolUse` trigger's `plansDirectory` resolution; the `PreToolUse`/`ExitPlanMode` trigger receives the plan path directly and does not need it.
 
 ```bash
 commd cclocate --transcript ~/.claude/projects/.../session.jsonl
@@ -231,6 +234,34 @@ commd cclocate --stdin
 ### Hook Setup
 
 Add the following to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "commd cchook",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The hook only activates in plan mode and automatically enables `--track-viewed`. The review opens *before* Claude Code's own plan approval dialog:
+
+1. Claude writes the plan and calls `ExitPlanMode`
+2. commd opens the plan for review
+3. **submitted** (exit 2): the review is sent to Claude as the denial reason; Claude revises the plan in plan mode and calls `ExitPlanMode` again (back to step 2)
+4. **approved / cancelled** (exit 0): Claude Code shows its usual plan approval dialog
+
+To review on every plan file write instead (including intermediate edits), use the `PostToolUse` trigger. It requires the file to be under `plansDirectory`:
 
 ```json
 {
@@ -250,11 +281,6 @@ Add the following to `.claude/settings.json`:
   }
 }
 ```
-
-The hook only activates in plan mode and launches the review TUI when a file under `plansDirectory` is written. The hook automatically enables `--track-viewed`.
-
-- **submitted** (exit 2): Sends review comments to Claude via stderr, prompting plan revision
-- **approved / cancelled** (exit 0): Continues normally
 
 Set `CC_PLAN_REVIEW_SKIP=1` to temporarily disable the hook.
 
