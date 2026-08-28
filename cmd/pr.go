@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/koh-sh/commd/internal/diff"
 	ghclient "github.com/koh-sh/commd/internal/github"
 	"github.com/koh-sh/commd/internal/markdown"
 	"github.com/koh-sh/commd/internal/tui"
@@ -98,7 +99,7 @@ func (p *PRCmd) Run(client *ghclient.Client) error {
 		// Parse diff for this file
 		var diffData *tui.DiffData
 		if patch := patches[path]; patch != "" {
-			if diffInfo := ghclient.ParsePatch(patch); diffInfo != nil {
+			if diffInfo := diff.ParsePatch(patch); diffInfo != nil {
 				lineMap, sideMap, typeMap := diffInfo.LineSideMap()
 				diffData = &tui.DiffData{
 					DisplayLines: diffInfo.FormatDiffLines(),

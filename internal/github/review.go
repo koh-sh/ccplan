@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	gh "github.com/google/go-github/v84/github"
+	"github.com/koh-sh/commd/internal/diff"
 	"github.com/koh-sh/commd/internal/markdown"
 )
 
@@ -33,7 +34,7 @@ func MapComment(c markdown.ReviewComment, path string, doc *markdown.Document) *
 
 	body := formatCommentBody(c)
 
-	side := SideRight
+	side := diff.SideRight
 	if c.Side != "" {
 		side = c.Side
 	}

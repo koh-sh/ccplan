@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	gh "github.com/google/go-github/v84/github"
+	"github.com/koh-sh/commd/internal/diff"
 	"github.com/koh-sh/commd/internal/markdown"
 )
 
@@ -37,7 +38,7 @@ func TestMapComment(t *testing.T) {
 				Path: "README.md",
 				Body: "**[suggestion]** Fix typo",
 				Line: 5,
-				Side: SideRight,
+				Side: diff.SideRight,
 			},
 		},
 		{
@@ -56,7 +57,7 @@ func TestMapComment(t *testing.T) {
 				Body:      "**[issue (blocking)]** Rewrite this section",
 				Line:      8,
 				StartLine: 5,
-				Side:      SideRight,
+				Side:      diff.SideRight,
 			},
 		},
 		{
@@ -66,14 +67,14 @@ func TestMapComment(t *testing.T) {
 				Action:    markdown.ActionNote,
 				Body:      "removed line note",
 				StartLine: 5,
-				Side:      SideLeft,
+				Side:      diff.SideLeft,
 			},
 			path: "README.md",
 			want: &PRReviewComment{
 				Path: "README.md",
 				Body: "**[note]** removed line note",
 				Line: 5,
-				Side: SideLeft,
+				Side: diff.SideLeft,
 			},
 		},
 		{
@@ -88,7 +89,7 @@ func TestMapComment(t *testing.T) {
 				Path: "README.md",
 				Body: "**[question]** Is this section needed?",
 				Line: 12,
-				Side: SideRight,
+				Side: diff.SideRight,
 			},
 		},
 		{
@@ -245,8 +246,8 @@ func TestBuildPRReview(t *testing.T) {
 				if c.GetStartLine() != 5 {
 					t.Errorf("StartLine = %d, want 5", c.GetStartLine())
 				}
-				if c.GetStartSide() != SideRight {
-					t.Errorf("StartSide = %q, want %q", c.GetStartSide(), SideRight)
+				if c.GetStartSide() != diff.SideRight {
+					t.Errorf("StartSide = %q, want %q", c.GetStartSide(), diff.SideRight)
 				}
 			}
 		})

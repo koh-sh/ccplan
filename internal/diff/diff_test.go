@@ -1,4 +1,4 @@
-package github
+package diff
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ func TestParsePatch(t *testing.T) {
 		name      string
 		patch     string
 		wantLines int
-		wantTypes []DiffLineType
+		wantTypes []LineType
 	}{
 		{
 			name: "simple addition",
@@ -19,7 +19,7 @@ func TestParsePatch(t *testing.T) {
  ## Section
  Content`,
 			wantLines: 4,
-			wantTypes: []DiffLineType{DiffContext, DiffAdded, DiffContext, DiffContext},
+			wantTypes: []LineType{Context, Added, Context, Context},
 		},
 		{
 			name: "mixed add and remove",
@@ -29,7 +29,7 @@ func TestParsePatch(t *testing.T) {
 +New line
  Content`,
 			wantLines: 4,
-			wantTypes: []DiffLineType{DiffContext, DiffRemoved, DiffAdded, DiffContext},
+			wantTypes: []LineType{Context, Removed, Added, Context},
 		},
 		{
 			name: "multiple hunks",
@@ -42,13 +42,13 @@ func TestParsePatch(t *testing.T) {
 +Added
  End`,
 			wantLines: 6,
-			wantTypes: []DiffLineType{DiffRemoved, DiffAdded, DiffContext, DiffContext, DiffAdded, DiffContext},
+			wantTypes: []LineType{Removed, Added, Context, Context, Added, Context},
 		},
 		{
 			name:      "no newline marker is skipped",
 			patch:     "@@ -1,2 +1,2 @@\n-old\n\\ No newline at end of file\n+new\n Content",
 			wantLines: 3,
-			wantTypes: []DiffLineType{DiffRemoved, DiffAdded, DiffContext},
+			wantTypes: []LineType{Removed, Added, Context},
 		},
 		{
 			name:      "empty patch",
