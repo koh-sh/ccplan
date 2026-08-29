@@ -589,7 +589,7 @@ func TestFindHeadingEndNoLines(t *testing.T) {
 	})
 }
 
-func TestByteOffsetToLine(t *testing.T) {
+func TestLineIndexLineAt(t *testing.T) {
 	tests := []struct {
 		name   string
 		source string
@@ -597,17 +597,19 @@ func TestByteOffsetToLine(t *testing.T) {
 		want   int
 	}{
 		{"start of file", "hello\nworld\n", 0, 1},
+		{"middle of first line", "hello\nworld\n", 3, 1},
 		{"after first newline", "hello\nworld\n", 6, 2},
 		{"end of file", "hello\nworld\n", 12, 3},
+		{"past end of file", "hello\nworld\n", 100, 3},
 		{"empty source", "", 0, 1},
 		{"single line no newline", "hello", 5, 1},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := byteOffsetToLine([]byte(tt.source), tt.offset)
+			got := newLineIndex([]byte(tt.source)).lineAt(tt.offset)
 			if got != tt.want {
-				t.Errorf("byteOffsetToLine(%q, %d) = %d, want %d", tt.source, tt.offset, got, tt.want)
+				t.Errorf("lineAt(%q, %d) = %d, want %d", tt.source, tt.offset, got, tt.want)
 			}
 		})
 	}

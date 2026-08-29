@@ -2,6 +2,7 @@ package markdown
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -66,6 +67,7 @@ func Parse(source []byte) (*Document, error) {
 	}
 
 	var flatSections []flatSection
+	lines := newLineIndex(source)
 
 	for i, h := range headings {
 		bodyStart := h.end
@@ -96,10 +98,10 @@ func Parse(source []byte) (*Document, error) {
 			continue
 		}
 
-		headingLine := byteOffsetToLine(source, h.start)
+		headingLine := lines.lineAt(h.start)
 		endLine := headingLine
 		if bodyStart < bodyEnd {
-			endLine = lastNonEmptyLine(source, bodyStart, bodyEnd, headingLine)
+			endLine = lastNonEmptyLine(source, lines, bodyStart, bodyEnd, headingLine)
 		}
 
 		flatSections = append(flatSections, flatSection{
@@ -283,21 +285,36 @@ type flatSection struct {
 	endLine   int // 1-based line number of last body line
 }
 
-// byteOffsetToLine returns the 1-based line number for a byte offset.
-func byteOffsetToLine(source []byte, offset int) int {
-	line := 1
-	for i := range min(offset, len(source)) {
-		if source[i] == '\n' {
-			line++
+// lineIndex holds the byte offset at which each line of a source starts, so
+// offset-to-line lookups are a binary search instead of a rescan from the top
+// of the file for every heading.
+type lineIndex []int
+
+// newLineIndex scans source once and records every line start.
+func newLineIndex(source []byte) lineIndex {
+	starts := lineIndex{0}
+	for i, b := range source {
+		if b == '\n' {
+			starts = append(starts, i+1)
 		}
 	}
-	return line
+	return starts
+}
+
+// lineAt returns the 1-based line number containing the byte offset. Offsets
+// past the end of the source map to the last line.
+func (li lineIndex) lineAt(offset int) int {
+	idx, found := slices.BinarySearch(li, offset)
+	if found {
+		return idx + 1 // offset is exactly a line start
+	}
+	return idx // idx is the first line starting after offset
 }
 
 // lastNonEmptyLine returns the 1-based line number of the last non-empty line
 // in the range [startOffset, endOffset) of source. Returns startLine if no
 // non-empty line is found.
-func lastNonEmptyLine(source []byte, startOffset, endOffset int, startLine int) int {
+func lastNonEmptyLine(source []byte, lines lineIndex, startOffset, endOffset int, startLine int) int {
 	if startOffset < 0 {
 		startOffset = 0
 	}
@@ -308,10 +325,9 @@ func lastNonEmptyLine(source []byte, startOffset, endOffset int, startLine int) 
 		return startLine
 	}
 	text := string(source[startOffset:endOffset])
-	lines := strings.Split(text, "\n")
 	last := startLine
-	lineNum := byteOffsetToLine(source, startOffset)
-	for _, l := range lines {
+	lineNum := lines.lineAt(startOffset)
+	for l := range strings.SplitSeq(text, "\n") {
 		if strings.TrimSpace(l) != "" {
 			last = lineNum
 		}
