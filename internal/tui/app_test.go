@@ -2040,3 +2040,166 @@ func TestAppLineCommentCarriesQuote(t *testing.T) {
 		t.Errorf("Quote = %q, want %q", got, "line four")
 	}
 }
+
+// TestRawViewLineComment drives the raw-view line-comment flow through
+// Update: with S1 selected, r enters raw view at the heading line, c comments
+// on the cursor line, V/j/c comments on a range, and ctrl+s stores the line
+// numbers and quoted source.
+func TestRawViewLineComment(t *testing.T) {
+	// Lines: 1 "# T", 2 "", 3 "## S", 4 "", 5 "line five", 6 "line six", 7 "line seven".
+	src := "# T\n\n## S\n\nline five\nline six\nline seven\n"
+
+	tests := []struct {
+		name      string
+		keys      []string // pressed after entering raw view on line 3
+		wantStart int
+		wantEnd   int
+		wantQuote string
+	}{
+		{
+			name:      "single line",
+			keys:      []string{"j", "j", "c"},
+			wantStart: 5,
+			wantEnd:   0,
+			wantQuote: "line five",
+		},
+		{
+			name:      "visual range downward",
+			keys:      []string{"j", "j", "V", "j", "c"},
+			wantStart: 5,
+			wantEnd:   6,
+			wantQuote: "line five|line six",
+		},
+		{
+			name:      "visual range upward",
+			keys:      []string{"j", "j", "j", "V", "k", "c"},
+			wantStart: 5,
+			wantEnd:   6,
+			wantQuote: "line five|line six",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc, err := markdown.Parse([]byte(src))
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := initApp(t, doc)
+			a.Update(keyMsg("j")) // select S1
+			a.Update(keyMsg("r")) // raw view, cursor on "## S" (line 3)
+			if !a.isRawMode() || a.focus != FocusRight {
+				t.Fatalf("after r: rawMode = %v, focus = %d, want raw mode with right focus", a.isRawMode(), a.focus)
+			}
+			for _, k := range tt.keys {
+				a.Update(keyMsg(k))
+			}
+			if a.mode != ModeComment {
+				t.Fatalf("mode = %d, want ModeComment", a.mode)
+			}
+			a.comment.textarea.SetValue("note")
+			a.Update(keyMsg("ctrl+s"))
+			if a.mode != ModeNormal {
+				t.Fatalf("mode after save = %d, want ModeNormal", a.mode)
+			}
+
+			comments := a.sectionList.GetComments("S1")
+			if len(comments) != 1 {
+				t.Fatalf("got %d comments on S1, want 1", len(comments))
+			}
+			c := comments[0]
+			if c.StartLine != tt.wantStart || c.EndLine != tt.wantEnd {
+				t.Errorf("lines = L%d-L%d, want L%d-L%d", c.StartLine, c.EndLine, tt.wantStart, tt.wantEnd)
+			}
+			if got := strings.Join(c.Quote, "|"); got != tt.wantQuote {
+				t.Errorf("Quote = %q, want %q", got, tt.wantQuote)
+			}
+		})
+	}
+}
+
+// TestLineSelectMode verifies entering and leaving visual line selection.
+func TestLineSelectMode(t *testing.T) {
+	tests := []struct {
+		name       string
+		keys       []string
+		wantMode   AppMode
+		wantSelect bool
+	}{
+		{name: "V enters line select", keys: []string{"V"}, wantMode: ModeLineSelect, wantSelect: true},
+		{name: "esc cancels line select", keys: []string{"V", "j", "esc"}, wantMode: ModeNormal, wantSelect: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc, err := markdown.Parse([]byte("# T\n\n## S\n\nline five\nline six\n"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := initApp(t, doc)
+			a.Update(keyMsg("j"))
+			a.Update(keyMsg("r"))
+			for _, k := range tt.keys {
+				a.Update(keyMsg(k))
+			}
+			if a.mode != tt.wantMode {
+				t.Errorf("mode = %d, want %d", a.mode, tt.wantMode)
+			}
+			if a.linePane.IsVisualSelect() != tt.wantSelect {
+				t.Errorf("IsVisualSelect() = %v, want %v", a.linePane.IsVisualSelect(), tt.wantSelect)
+			}
+		})
+	}
+}
+
+// TestSinglePaneShowsRightPaneModes verifies that a narrow terminal, which
+// draws only one pane, switches to the right pane when a section action from
+// the left pane opens the comment editor or comment list.
+func TestSinglePaneShowsRightPaneModes(t *testing.T) {
+	tests := []struct {
+		name     string
+		setup    func(a *App)
+		key      string
+		wantMode AppMode
+		wantText string
+	}{
+		{
+			name:     "comment editor",
+			key:      "c",
+			wantMode: ModeComment,
+			wantText: "Comment [",
+		},
+		{
+			name: "comment list",
+			setup: func(a *App) {
+				a.sectionList.AddComment("S1", &markdown.ReviewComment{Body: "existing note"})
+			},
+			key:      "C",
+			wantMode: ModeCommentList,
+			wantText: "Comments on S1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := NewApp(makeLargeDoc(3, 0), AppOptions{})
+			a.Update(tea.WindowSizeMsg{Width: singlePaneWidth - 10, Height: 30})
+			a.Update(keyMsg("j")) // S1, left pane keeps focus
+			if tt.setup != nil {
+				tt.setup(a)
+			}
+
+			a.Update(keyMsg(tt.key))
+
+			if a.mode != tt.wantMode {
+				t.Fatalf("mode = %d, want %d", a.mode, tt.wantMode)
+			}
+			if a.focus != FocusLeft {
+				t.Errorf("focus = %d, want FocusLeft (section actions must not steal focus)", a.focus)
+			}
+			if view := a.View().Content; !strings.Contains(view, tt.wantText) {
+				t.Errorf("View() does not show %q in single-pane layout:\n%s", tt.wantText, view)
+			}
+			if tt.wantMode == ModeComment && a.commentCursor() == nil {
+				t.Error("commentCursor() = nil, want a visible cursor for the on-screen editor")
+			}
+		})
+	}
+}
