@@ -1025,25 +1025,10 @@ func (a *App) commentCursor() *tea.Cursor {
 	innerH := paneInnerSize(ch)
 	rw := a.rightWidth()
 	rightInnerW := paneInnerSize(rw)
-	singlePane := a.width < 80
+	singlePane := a.singlePane()
 
-	// In single-pane mode the comment editor is rendered only when the right
-	// pane has focus; otherwise it is off-screen and the cursor must stay
-	// hidden to avoid landing on unrelated content.
-	if singlePane && a.focus != FocusRight {
-		return nil
-	}
-
-	// Mirror the height calculation in renderRightContent's ModeComment branch
-	// so the cursor lands on the same row where the textarea is drawn.
-	commentLabel := "Comment [" + a.comment.FormatLabel() + "]"
-	if ref := a.comment.FormatLineRef(); ref != "" {
-		commentLabel += " (" + ref + ")"
-	}
-	separator := a.styles.CommentBorder.Width(rightInnerW).Render(commentLabel)
+	separator, _, detailHeight := a.commentLayout(rightInnerW, innerH)
 	sepHeight := lipgloss.Height(separator)
-	commentViewHeight := lipgloss.Height(a.comment.View())
-	detailHeight := max(innerH-sepHeight-commentViewHeight, 1)
 
 	paneLeftCol := 0
 	if !singlePane {
@@ -1054,6 +1039,39 @@ func (a *App) commentCursor() *tea.Cursor {
 	cur.X += paneLeftCol + 1
 	cur.Y += tbHeight + 1 + detailHeight + sepHeight
 	return cur
+}
+
+// singlePaneWidth is the terminal width below which only one pane is drawn.
+const singlePaneWidth = 80
+
+// singlePane reports whether the terminal is too narrow for two panes.
+func (a *App) singlePane() bool {
+	return a.width < singlePaneWidth
+}
+
+// singlePaneShowsRight reports which pane a single-pane layout draws: the
+// right pane when it has focus or when a mode that only renders there
+// (comment editor, comment list) is active, otherwise the section list.
+// Section actions can enter those modes while the left pane has focus, so
+// checking focus alone would leave the editor accepting input off-screen.
+func (a *App) singlePaneShowsRight() bool {
+	return a.focus == FocusRight || a.mode == ModeComment || a.mode == ModeCommentList
+}
+
+// commentLayout returns the comment editor's separator line, the editor view,
+// and how many rows remain for the detail view above them, for a right pane
+// of the given inner size. renderRightContent draws with it and
+// commentCursor positions the cursor with it, so both always agree.
+func (a *App) commentLayout(width, height int) (separator, commentView string, detailHeight int) {
+	label := "Comment [" + a.comment.FormatLabel() + "]"
+	if ref := a.comment.FormatLineRef(); ref != "" {
+		label += " (" + ref + ")"
+	}
+	separator = a.styles.CommentBorder.Width(width).Render(label)
+	commentView = a.comment.View()
+	// \n between parts does not add extra lines in lipgloss.Height
+	detailHeight = max(height-lipgloss.Height(separator)-lipgloss.Height(commentView), 1)
+	return separator, commentView, detailHeight
 }
 
 // renderApp returns the rendered string content for the current state.
@@ -1082,7 +1100,7 @@ func (a *App) renderApp() string {
 	rw := a.rightWidth()
 	leftInnerW := paneInnerSize(lw)
 	rightInnerW := paneInnerSize(rw)
-	singlePane := a.width < 80
+	singlePane := a.singlePane()
 
 	// Left pane
 	leftContent := clipLines(a.sectionList.Render(leftInnerW, innerH, a.styles), innerH)
@@ -1098,7 +1116,7 @@ func (a *App) renderApp() string {
 
 	if singlePane {
 		var pane string
-		if a.focus == FocusRight {
+		if a.singlePaneShowsRight() {
 			rightContent := clipLines(a.renderRightContent(rightInnerW, innerH), innerH)
 			rightBorder := a.styles.ActiveBorder
 			pane = rightBorder.Width(rw).Height(ch).MaxHeight(ch).Render(rightContent)
@@ -1138,18 +1156,7 @@ func (a *App) renderApp() string {
 func (a *App) renderRightContent(width, height int) string {
 	switch a.mode {
 	case ModeComment:
-		// Show line ref in comment header when editing a line-level comment
-		commentLabel := "Comment [" + a.comment.FormatLabel() + "]"
-		if ref := a.comment.FormatLineRef(); ref != "" {
-			commentLabel += " (" + ref + ")"
-		}
-		separator := a.styles.CommentBorder.Width(width).Render(commentLabel)
-		commentView := a.comment.View()
-
-		// \n between parts does not add extra lines in lipgloss.Height
-		sepHeight := lipgloss.Height(separator)
-		commentViewHeight := lipgloss.Height(commentView)
-		detailHeight := max(height-sepHeight-commentViewHeight, 1)
+		separator, commentView, detailHeight := a.commentLayout(width, height)
 
 		var detailView string
 		if a.isRawMode() {
