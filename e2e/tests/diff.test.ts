@@ -67,6 +67,8 @@ describe("Diff Mode", () => {
 
   afterEach(async () => {
     session?.close();
+    // Wait for the commd process to exit after SIGTERM before removing the
+    // repo it is still running in (same reason as createTempFixture cleanup).
     await Bun.sleep(300);
     repo?.cleanup();
     repo = undefined;
