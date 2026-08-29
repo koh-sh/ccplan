@@ -11,9 +11,11 @@ import (
 // permissionModePlan is the Claude Code permission mode that triggers plan review.
 const permissionModePlan = "plan"
 
-// Hook event and tool names that identify the ExitPlanMode trigger.
+// Hook event and tool names that identify the two supported triggers:
+// PreToolUse on ExitPlanMode and PostToolUse on Write/Edit.
 const (
 	eventPreToolUse  = "PreToolUse"
+	eventPostToolUse = "PostToolUse"
 	toolExitPlanMode = "ExitPlanMode"
 )
 

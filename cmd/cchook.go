@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -28,7 +29,7 @@ func (h *HookCmd) runExit(r io.Reader) int {
 
 	spawner := pane.ByName(h.Spawner)
 
-	exitCode, err := cchook.Run(input, cchook.RunConfig{
+	exitCode, err := cchook.Run(context.Background(), input, cchook.RunConfig{
 		Spawner: spawner,
 		Theme:   h.Theme,
 	})

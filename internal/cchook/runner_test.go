@@ -30,100 +30,6 @@ func (m *mockSpawner) SpawnAndWait(_ context.Context, cmd string, args []string)
 	return nil
 }
 
-func TestRunSkipsNonPlanMode(t *testing.T) {
-	mock := &mockSpawner{available: true, name: "mock"}
-	input := &Input{PermissionMode: "default"}
-	code, err := Run(input, RunConfig{Spawner: mock})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0", code)
-	}
-	if mock.spawnCalled {
-		t.Error("spawner should not be called for non-plan mode")
-	}
-}
-
-func TestRunSkipsPlanReviewSkipEnv(t *testing.T) {
-	t.Setenv("CC_PLAN_REVIEW_SKIP", "1")
-	mock := &mockSpawner{available: true, name: "mock"}
-	input := &Input{PermissionMode: "plan"}
-	code, err := Run(input, RunConfig{Spawner: mock})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0", code)
-	}
-	if mock.spawnCalled {
-		t.Error("spawner should not be called when CC_PLAN_REVIEW_SKIP=1")
-	}
-}
-
-func TestRunSkipsNilToolInput(t *testing.T) {
-	mock := &mockSpawner{available: true, name: "mock"}
-	input := &Input{
-		PermissionMode: "plan",
-		ToolInput:      nil,
-	}
-	code, err := Run(input, RunConfig{Spawner: mock})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0", code)
-	}
-	if mock.spawnCalled {
-		t.Error("spawner should not be called with nil tool_input")
-	}
-}
-
-func TestRunSkipsEmptyFilePath(t *testing.T) {
-	mock := &mockSpawner{available: true, name: "mock"}
-	input := &Input{
-		PermissionMode: "plan",
-		ToolInput:      &ToolInput{FilePath: ""},
-	}
-	code, err := Run(input, RunConfig{Spawner: mock})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0", code)
-	}
-	if mock.spawnCalled {
-		t.Error("spawner should not be called with empty file_path")
-	}
-}
-
-func TestRunSkipsNonPlanFile(t *testing.T) {
-	// Create a temp file that exists but is NOT under plans directory
-	tmpFile, err := os.CreateTemp("", "not-a-plan-*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tmpFile.Close()
-	defer os.Remove(tmpFile.Name())
-
-	mock := &mockSpawner{available: true, name: "mock"}
-	input := &Input{
-		HookInput:      cclocate.HookInput{CWD: t.TempDir()},
-		PermissionMode: "plan",
-		ToolInput:      &ToolInput{FilePath: tmpFile.Name()},
-	}
-	code, err := Run(input, RunConfig{Spawner: mock})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0", code)
-	}
-	if mock.spawnCalled {
-		t.Error("spawner should not be called for file outside plans directory")
-	}
-}
-
 // setupPlanEnv creates a temporary directory structure that simulates
 // a project with .claude/settings.local.json pointing to a plans directory,
 // and a plan file inside that directory.
@@ -151,147 +57,128 @@ func setupPlanEnv(t *testing.T) (plansDir, planFile, cwd string) {
 	return
 }
 
-func TestRunSuccessWithReview(t *testing.T) {
-	_, planFile, cwd := setupPlanEnv(t)
+// postToolUseInput builds a plan-mode PostToolUse/Write hook input for filePath.
+func postToolUseInput(cwd, filePath string) *Input {
+	return &Input{
+		HookInput:      cclocate.HookInput{CWD: cwd},
+		HookEventName:  "PostToolUse",
+		PermissionMode: "plan",
+		ToolName:       "Write",
+		ToolInput:      &ToolInput{FilePath: filePath},
+	}
+}
 
-	mock := &mockSpawner{
-		available: true,
-		name:      "mock",
-		spawnFunc: func(cmd string, args []string) error {
-			// Find --output-path in args and write review content
-			for i, arg := range args {
-				if arg == "--output-path" && i+1 < len(args) {
-					return os.WriteFile(args[i+1], []byte("review feedback"), 0o644)
-				}
-			}
+// outputPath returns the value following --output-path in the review args.
+func outputPath(args []string) string {
+	for i, arg := range args {
+		if arg == "--output-path" && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
+// writeReview returns a spawnFunc that writes review to the --output-path
+// file, simulating a review session that ended with that output.
+func writeReview(review string) func(string, []string) error {
+	return func(_ string, args []string) error {
+		path := outputPath(args)
+		if path == "" {
 			return fmt.Errorf("--output-path not found in args")
+		}
+		return os.WriteFile(path, []byte(review), 0o644)
+	}
+}
+
+func TestRunSkipsSpawn(t *testing.T) {
+	plansDir, planFile, cwd := setupPlanEnv(t)
+	notPlan := filepath.Join(t.TempDir(), "not-a-plan.go")
+	if err := os.WriteFile(notPlan, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		input   *Input
+		skipEnv string
+	}{
+		{name: "non-plan permission mode", input: &Input{PermissionMode: "default"}},
+		{name: "CC_PLAN_REVIEW_SKIP=1", input: postToolUseInput(cwd, planFile), skipEnv: "1"},
+		{name: "nil tool_input", input: &Input{PermissionMode: "plan"}},
+		{name: "empty file_path", input: postToolUseInput(cwd, "")},
+		{name: "file outside plans directory", input: postToolUseInput(cwd, notPlan)},
+		{name: "plan file does not exist", input: postToolUseInput(cwd, filepath.Join(plansDir, "nonexistent.md"))},
+		{
+			name: "file_path without PostToolUse event",
+			input: &Input{
+				HookInput:      cclocate.HookInput{CWD: cwd},
+				PermissionMode: "plan",
+				ToolInput:      &ToolInput{FilePath: planFile},
+			},
 		},
 	}
-
-	input := &Input{
-		HookInput:      cclocate.HookInput{CWD: cwd},
-		PermissionMode: "plan",
-		ToolInput:      &ToolInput{FilePath: planFile},
-	}
-
-	code, err := Run(input, RunConfig{Spawner: mock})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if code != 2 {
-		t.Errorf("exit code = %d, want 2 (feedback)", code)
-	}
-	if !mock.spawnCalled {
-		t.Error("spawner should have been called")
-	}
-}
-
-func TestRunSuccessNoReview(t *testing.T) {
-	_, planFile, cwd := setupPlanEnv(t)
-
-	mock := &mockSpawner{
-		available: true,
-		name:      "mock",
-		spawnFunc: func(cmd string, args []string) error {
-			// Don't write anything to output path (empty review)
-			return nil
-		},
-	}
-
-	input := &Input{
-		HookInput:      cclocate.HookInput{CWD: cwd},
-		PermissionMode: "plan",
-		ToolInput:      &ToolInput{FilePath: planFile},
-	}
-
-	code, err := Run(input, RunConfig{Spawner: mock})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0", code)
-	}
-}
-
-func TestRunFileNotFound(t *testing.T) {
-	plansDir, _, cwd := setupPlanEnv(t)
-
-	mock := &mockSpawner{available: true, name: "mock"}
-	input := &Input{
-		HookInput:      cclocate.HookInput{CWD: cwd},
-		PermissionMode: "plan",
-		ToolInput:      &ToolInput{FilePath: filepath.Join(plansDir, "nonexistent.md")},
-	}
-
-	code, err := Run(input, RunConfig{Spawner: mock})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0", code)
-	}
-	if mock.spawnCalled {
-		t.Error("spawner should not be called for nonexistent file")
-	}
-}
-
-func TestRunSpawnFailure(t *testing.T) {
-	_, planFile, cwd := setupPlanEnv(t)
-
-	mock := &mockSpawner{
-		available: true,
-		name:      pane.NameDirect, // name="direct" so fallback is skipped
-		spawnFunc: func(cmd string, args []string) error {
-			return fmt.Errorf("spawn failed")
-		},
-	}
-
-	input := &Input{
-		HookInput:      cclocate.HookInput{CWD: cwd},
-		PermissionMode: "plan",
-		ToolInput:      &ToolInput{FilePath: planFile},
-	}
-
-	// When spawn fails and name is "direct", no further fallback → exit 0
-	code, err := Run(input, RunConfig{Spawner: mock})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0", code)
-	}
-}
-
-func TestRunReviewFileRemoved(t *testing.T) {
-	_, planFile, cwd := setupPlanEnv(t)
-
-	mock := &mockSpawner{
-		available: true,
-		name:      "mock",
-		spawnFunc: func(cmd string, args []string) error {
-			// Remove the review output file to trigger ReadFile error
-			for i, arg := range args {
-				if arg == "--output-path" && i+1 < len(args) {
-					os.Remove(args[i+1])
-					return nil
-				}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("CC_PLAN_REVIEW_SKIP", tt.skipEnv)
+			mock := &mockSpawner{available: true, name: "mock"}
+			code, err := Run(context.Background(), tt.input, RunConfig{Spawner: mock})
+			if err != nil {
+				t.Fatal(err)
 			}
-			return nil
+			if code != 0 {
+				t.Errorf("exit code = %d, want 0", code)
+			}
+			if mock.spawnCalled {
+				t.Error("spawner should not be called")
+			}
+		})
+	}
+}
+
+func TestRunSpawnOutcomes(t *testing.T) {
+	_, planFile, cwd := setupPlanEnv(t)
+
+	tests := []struct {
+		name      string
+		spawner   string // spawner name; NameDirect disables the direct fallback
+		spawnFunc func(cmd string, args []string) error
+		wantCode  int
+	}{
+		{name: "submitted review returns 2", spawnFunc: writeReview("review feedback"), wantCode: 2},
+		{name: "empty review returns 0", spawnFunc: writeReview(""), wantCode: 0},
+		{
+			name:      "spawn failure without fallback returns 0",
+			spawner:   pane.NameDirect,
+			spawnFunc: func(string, []string) error { return fmt.Errorf("spawn failed") },
+			wantCode:  0,
+		},
+		{
+			name: "review file removed returns 0",
+			spawnFunc: func(_ string, args []string) error {
+				os.Remove(outputPath(args))
+				return nil
+			},
+			wantCode: 0,
 		},
 	}
-
-	input := &Input{
-		HookInput:      cclocate.HookInput{CWD: cwd},
-		PermissionMode: "plan",
-		ToolInput:      &ToolInput{FilePath: planFile},
-	}
-
-	code, err := Run(input, RunConfig{Spawner: mock})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if code != 0 {
-		t.Errorf("exit code = %d, want 0", code)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			name := tt.spawner
+			if name == "" {
+				name = "mock"
+			}
+			mock := &mockSpawner{available: true, name: name, spawnFunc: tt.spawnFunc}
+			code, err := Run(context.Background(), postToolUseInput(cwd, planFile), RunConfig{Spawner: mock})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if code != tt.wantCode {
+				t.Errorf("exit code = %d, want %d", code, tt.wantCode)
+			}
+			if !mock.spawnCalled {
+				t.Error("spawner should have been called")
+			}
+		})
 	}
 }
 
@@ -342,34 +229,29 @@ func TestResolvePlanFile(t *testing.T) {
 			wantOK: false,
 		},
 		{
-			name: "PostToolUse Write under plansDirectory",
+			name: "PreToolUse on another tool ignores file_path",
 			input: &Input{
 				HookInput:     cclocate.HookInput{CWD: cwd},
-				HookEventName: "PostToolUse",
+				HookEventName: "PreToolUse",
 				ToolName:      "Write",
 				ToolInput:     &ToolInput{FilePath: planFile},
-			},
-			want:   planFile,
-			wantOK: true,
-		},
-		{
-			name: "PostToolUse Write outside plansDirectory",
-			input: &Input{
-				HookInput:     cclocate.HookInput{CWD: cwd},
-				HookEventName: "PostToolUse",
-				ToolName:      "Write",
-				ToolInput:     &ToolInput{FilePath: outside},
 			},
 			wantOK: false,
 		},
 		{
-			name: "PostToolUse Write with empty file_path",
-			input: &Input{
-				HookInput:     cclocate.HookInput{CWD: cwd},
-				HookEventName: "PostToolUse",
-				ToolName:      "Write",
-				ToolInput:     &ToolInput{},
-			},
+			name:   "PostToolUse Write under plansDirectory",
+			input:  postToolUseInput(cwd, planFile),
+			want:   planFile,
+			wantOK: true,
+		},
+		{
+			name:   "PostToolUse Write outside plansDirectory",
+			input:  postToolUseInput(cwd, outside),
+			wantOK: false,
+		},
+		{
+			name:   "PostToolUse Write with empty file_path",
+			input:  postToolUseInput(cwd, ""),
 			wantOK: false,
 		},
 	}
@@ -406,17 +288,13 @@ func TestRunExitPlanModeTrigger(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var reviewedFile string
+			write := writeReview(tt.review)
 			mock := &mockSpawner{
 				available: true,
 				name:      "mock",
-				spawnFunc: func(_ string, args []string) error {
+				spawnFunc: func(cmd string, args []string) error {
 					reviewedFile = args[len(args)-1]
-					for i, arg := range args {
-						if arg == "--output-path" && i+1 < len(args) {
-							return os.WriteFile(args[i+1], []byte(tt.review), 0o644)
-						}
-					}
-					return fmt.Errorf("--output-path not found in args")
+					return write(cmd, args)
 				},
 			}
 			input := &Input{
@@ -426,7 +304,7 @@ func TestRunExitPlanModeTrigger(t *testing.T) {
 				ToolName:       "ExitPlanMode",
 				ToolInput:      &ToolInput{PlanFilePath: planFile},
 			}
-			code, err := Run(input, RunConfig{Spawner: mock, Theme: "dark"})
+			code, err := Run(context.Background(), input, RunConfig{Spawner: mock, Theme: "dark"})
 			if err != nil {
 				t.Fatal(err)
 			}

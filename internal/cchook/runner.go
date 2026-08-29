@@ -15,9 +15,10 @@ type RunConfig struct {
 	Theme   string
 }
 
-// Run executes the hook orchestration flow.
+// Run executes the hook orchestration flow. ctx bounds the wait for the
+// review pane; cancelling it aborts the review as if nothing was submitted.
 // Returns exitCode: 0 = continue normally, 2 = feedback to Claude.
-func Run(input *Input, cfg RunConfig) (int, error) {
+func Run(ctx context.Context, input *Input, cfg RunConfig) (int, error) {
 	// Early returns
 	if input.PermissionMode != permissionModePlan {
 		return 0, nil
@@ -63,7 +64,6 @@ func Run(input *Input, cfg RunConfig) (int, error) {
 	}
 
 	// Spawn review in pane
-	ctx := context.Background()
 	spawner := cfg.Spawner
 	err = spawner.SpawnAndWait(ctx, executable, args)
 	if err != nil {
@@ -106,6 +106,9 @@ func resolvePlanFile(input *Input) (string, bool) {
 	}
 	if input.HookEventName == eventPreToolUse && input.ToolName == toolExitPlanMode {
 		return input.ToolInput.PlanFilePath, input.ToolInput.PlanFilePath != ""
+	}
+	if input.HookEventName != eventPostToolUse {
+		return "", false
 	}
 	planFile := input.ToolInput.FilePath
 	if planFile == "" {
