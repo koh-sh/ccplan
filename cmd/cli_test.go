@@ -57,6 +57,7 @@ func TestCommandValidate(t *testing.T) {
 		{name: "locate no args", cmd: &LocateCmd{}, wantErr: "--transcript or --stdin is required"},
 		{name: "locate transcript", cmd: &LocateCmd{Transcript: "any/path.jsonl"}},
 		{name: "locate stdin", cmd: &LocateCmd{Stdin: true}},
+		{name: "locate transcript and stdin", cmd: &LocateCmd{Transcript: "any/path.jsonl", Stdin: true}, wantErr: "--transcript and --stdin are mutually exclusive"},
 
 		// ReviewCmd: requires --output-path when --output=file.
 		{name: "review file with path", cmd: &ReviewCmd{Files: []string{"any.md"}, Output: "file", OutputPath: "any/path"}},

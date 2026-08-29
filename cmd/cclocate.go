@@ -7,11 +7,16 @@ import (
 	"github.com/koh-sh/commd/internal/cclocate"
 )
 
-// Validate requires --transcript or --stdin. Note that the transcript path
-// resolved from stdin (when --stdin is set) is checked in Run, not here.
+// Validate requires exactly one of --transcript or --stdin; with --stdin the
+// transcript path comes from the hook input, so a --transcript given alongside
+// it would be silently ignored. The path resolved from stdin is checked in
+// Run, not here.
 func (l *LocateCmd) Validate() error {
 	if l.Transcript == "" && !l.Stdin {
 		return fmt.Errorf("--transcript or --stdin is required")
+	}
+	if l.Transcript != "" && l.Stdin {
+		return fmt.Errorf("--transcript and --stdin are mutually exclusive")
 	}
 	return nil
 }
