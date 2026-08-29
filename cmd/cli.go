@@ -12,7 +12,7 @@ type CLI struct {
 	Review   ReviewCmd  `cmd:"" default:"withargs" help:"Review a Markdown file in TUI (default command: commd file.md)"`
 	PR       PRCmd      `cmd:"" help:"Review Markdown files in a GitHub PR"`
 	Cclocate LocateCmd  `cmd:"cclocate" help:"Locate file path from Claude Code transcript"`
-	Cchook   HookCmd    `cmd:"cchook" help:"Run as Claude Code PostToolUse hook"`
+	Cchook   HookCmd    `cmd:"cchook" help:"Run as Claude Code hook (PreToolUse ExitPlanMode or PostToolUse Write|Edit)"`
 	Version  VersionCmd `cmd:"" help:"Show version"`
 }
 
@@ -54,7 +54,7 @@ type LocateCmd struct {
 
 // VersionCmd is the version subcommand.
 type VersionCmd struct {
-	Version string `kong:"hidden,env='version'"`
+	Version string `hidden:"" env:"version"`
 }
 
 // Run executes the version subcommand.
