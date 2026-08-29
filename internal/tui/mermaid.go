@@ -53,8 +53,14 @@ func renderMermaidBlocks(md string) string {
 }
 
 // tryRenderMermaid attempts to convert mermaid source to ASCII art.
-// On error (e.g. unsupported diagram type) it returns the original source.
-func tryRenderMermaid(source string) string {
+// On error or panic (e.g. unsupported diagram type, malformed input that
+// trips the third-party renderer) it returns the original source.
+func tryRenderMermaid(source string) (result string) {
+	defer func() {
+		if r := recover(); r != nil {
+			result = source
+		}
+	}()
 	cfg := diagram.DefaultConfig()
 	rendered, err := cmd.RenderDiagram(source, cfg)
 	if err != nil {
