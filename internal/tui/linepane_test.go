@@ -689,3 +689,41 @@ func TestLinePaneSourceText(t *testing.T) {
 		})
 	}
 }
+
+// TestSetSizeKeepsCursorVisible verifies that resizing the pane re-clamps the
+// scroll offset so the cursor never ends up outside the visible rows.
+func TestSetSizeKeepsCursorVisible(t *testing.T) {
+	lines := make([]string, 50)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line%d", i+1)
+	}
+
+	tests := []struct {
+		name   string
+		move   func(lp *LinePane)
+		height int
+	}{
+		{"shrink with cursor at bottom", func(lp *LinePane) { lp.CursorBottom() }, 4},
+		{"shrink with cursor below new height", func(lp *LinePane) {
+			for range 7 {
+				lp.CursorDown()
+			}
+		}, 3},
+		{"grow does not scroll past the end", func(lp *LinePane) { lp.CursorBottom() }, 30},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lp := newTestLinePane(lines, nil) // height 10
+			tt.move(lp)
+
+			lp.SetSize(40, tt.height)
+
+			if lp.cursor < lp.scrollOffset || lp.cursor >= lp.scrollOffset+tt.height {
+				t.Errorf("cursor %d not within visible rows [%d, %d)", lp.cursor, lp.scrollOffset, lp.scrollOffset+tt.height)
+			}
+			if maxOffset := max(len(lines)-tt.height, 0); lp.scrollOffset > maxOffset {
+				t.Errorf("scrollOffset = %d, want <= %d", lp.scrollOffset, maxOffset)
+			}
+		})
+	}
+}

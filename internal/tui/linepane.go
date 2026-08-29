@@ -66,10 +66,15 @@ func (lp *LinePane) buildSectionRanges(sections []*markdown.Section) {
 	}
 }
 
-// SetSize updates the pane dimensions.
+// SetSize updates the pane dimensions and keeps the cursor on screen, so a
+// terminal that shrinks (or a comment editor that takes rows away) never
+// leaves the cursor below the visible area until the next move.
 func (lp *LinePane) SetSize(width, height int) {
 	lp.width = width
 	lp.height = height
+	if height > 0 {
+		lp.ensureVisible()
+	}
 }
 
 // SetViewRange sets the visible line range (1-based file line numbers, inclusive).
