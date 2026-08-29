@@ -221,22 +221,38 @@ func (a *App) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+// scrollTarget runs a vertical navigation action on whichever pane currently
+// owns the cursor: the section list when the left pane has focus, the line
+// pane in raw view, and the rendered detail viewport otherwise. Each action is
+// followed by the sync that keeps the other panes consistent with it.
+//
+// raw is only called in raw mode, so callers may pass a linePane method
+// value even when linePane is nil (method values on nil pointers are legal
+// as long as they are never invoked).
+func (a *App) scrollTarget(list, raw, detail func()) {
+	switch {
+	case a.focus == FocusLeft:
+		list()
+		a.refreshAfterCursorMove()
+	case a.isRawMode():
+		raw()
+		a.syncSectionFromLineCursor()
+	default:
+		detail()
+		a.syncCursorToScroll()
+	}
+}
+
 func (a *App) handleNormalMode(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Handle 'gg' chord (second g after pending g)
 	if a.pendingG {
 		a.pendingG = false
 		if msg.String() == "g" {
-			switch {
-			case a.focus == FocusLeft:
-				a.sectionList.CursorTop()
-				a.refreshAfterCursorMove()
-			case a.isRawMode():
-				a.linePane.CursorTop()
-				a.syncSectionFromLineCursor()
-			default:
-				a.detail.Viewport().GotoTop()
-				a.syncCursorToScroll()
-			}
+			a.scrollTarget(
+				a.sectionList.CursorTop,
+				a.linePane.CursorTop,
+				func() { a.detail.Viewport().GotoTop() },
+			)
 			return a, nil
 		}
 		// Not 'g' after pending g -- fall through to normal handling
@@ -248,17 +264,11 @@ func (a *App) handleNormalMode(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a.pendingG = true
 		return a, nil
 	case "G":
-		switch {
-		case a.focus == FocusLeft:
-			a.sectionList.CursorBottom()
-			a.refreshAfterCursorMove()
-		case a.isRawMode():
-			a.linePane.CursorBottom()
-			a.syncSectionFromLineCursor()
-		default:
-			a.detail.Viewport().GotoBottom()
-			a.syncCursorToScroll()
-		}
+		a.scrollTarget(
+			a.sectionList.CursorBottom,
+			a.linePane.CursorBottom,
+			func() { a.detail.Viewport().GotoBottom() },
+		)
 		return a, nil
 	}
 
@@ -341,56 +351,32 @@ func (a *App) handleNormalMode(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Page scroll keys dispatch based on focus
 	switch {
 	case key.Matches(msg, a.keymap.HalfPageDown):
-		switch {
-		case a.focus == FocusLeft:
-			a.sectionList.CursorHalfPageDown(a.contentHeight())
-			a.refreshAfterCursorMove()
-		case a.isRawMode():
-			a.linePane.HalfPageDown()
-			a.syncSectionFromLineCursor()
-		default:
-			a.detail.Viewport().HalfPageDown()
-			a.syncCursorToScroll()
-		}
+		a.scrollTarget(
+			func() { a.sectionList.CursorHalfPageDown(a.contentHeight()) },
+			a.linePane.HalfPageDown,
+			a.detail.Viewport().HalfPageDown,
+		)
 		return a, nil
 	case key.Matches(msg, a.keymap.HalfPageUp):
-		switch {
-		case a.focus == FocusLeft:
-			a.sectionList.CursorHalfPageUp(a.contentHeight())
-			a.refreshAfterCursorMove()
-		case a.isRawMode():
-			a.linePane.HalfPageUp()
-			a.syncSectionFromLineCursor()
-		default:
-			a.detail.Viewport().HalfPageUp()
-			a.syncCursorToScroll()
-		}
+		a.scrollTarget(
+			func() { a.sectionList.CursorHalfPageUp(a.contentHeight()) },
+			a.linePane.HalfPageUp,
+			a.detail.Viewport().HalfPageUp,
+		)
 		return a, nil
 	case key.Matches(msg, a.keymap.PageDown):
-		switch {
-		case a.focus == FocusLeft:
-			a.sectionList.CursorPageDown(a.contentHeight())
-			a.refreshAfterCursorMove()
-		case a.isRawMode():
-			a.linePane.PageDown()
-			a.syncSectionFromLineCursor()
-		default:
-			a.detail.Viewport().PageDown()
-			a.syncCursorToScroll()
-		}
+		a.scrollTarget(
+			func() { a.sectionList.CursorPageDown(a.contentHeight()) },
+			a.linePane.PageDown,
+			a.detail.Viewport().PageDown,
+		)
 		return a, nil
 	case key.Matches(msg, a.keymap.PageUp):
-		switch {
-		case a.focus == FocusLeft:
-			a.sectionList.CursorPageUp(a.contentHeight())
-			a.refreshAfterCursorMove()
-		case a.isRawMode():
-			a.linePane.PageUp()
-			a.syncSectionFromLineCursor()
-		default:
-			a.detail.Viewport().PageUp()
-			a.syncCursorToScroll()
-		}
+		a.scrollTarget(
+			func() { a.sectionList.CursorPageUp(a.contentHeight()) },
+			a.linePane.PageUp,
+			a.detail.Viewport().PageUp,
+		)
 		return a, nil
 	}
 
