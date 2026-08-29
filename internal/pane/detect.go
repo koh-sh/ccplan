@@ -21,9 +21,8 @@ func ByName(name string) PaneSpawner {
 	case NameTmux:
 		// tmux support is not yet implemented; fall back to DirectSpawner.
 		return &DirectSpawner{}
-	case NameAuto, "":
-		return AutoDetect()
 	default:
+		// NameAuto, "" and unknown names all auto-detect.
 		return AutoDetect()
 	}
 }
