@@ -33,6 +33,28 @@ const (
 	dialogModeBody
 )
 
+// reviewDialogKeyMap holds the dialog's key bindings, built once at
+// construction like App's KeyMap rather than on every key press.
+type reviewDialogKeyMap struct {
+	Exit   key.Binding // select mode: leave without submitting
+	Down   key.Binding
+	Up     key.Binding
+	Select key.Binding
+	Back   key.Binding // body mode: return to action selection
+	Save   key.Binding // body mode: submit with the entered body
+}
+
+func newReviewDialogKeyMap() reviewDialogKeyMap {
+	return reviewDialogKeyMap{
+		Exit:   key.NewBinding(key.WithKeys("q", "esc", "ctrl+c")),
+		Down:   key.NewBinding(key.WithKeys("j", "down")),
+		Up:     key.NewBinding(key.WithKeys("k", "up")),
+		Select: key.NewBinding(key.WithKeys("enter")),
+		Back:   key.NewBinding(key.WithKeys("esc")),
+		Save:   key.NewBinding(key.WithKeys("ctrl+s")),
+	}
+}
+
 // ReviewDialog is a Bubble Tea model for the post-review action selection.
 type ReviewDialog struct {
 	// Input
@@ -49,6 +71,7 @@ type ReviewDialog struct {
 	quitting bool
 	width    int
 	height   int
+	keymap   reviewDialogKeyMap
 }
 
 // NewReviewDialog creates a review dialog.
@@ -64,6 +87,7 @@ func NewReviewDialog(fileSummary []string, hasComments bool) *ReviewDialog {
 		fileSummary: fileSummary,
 		hasComments: hasComments,
 		textarea:    ta,
+		keymap:      newReviewDialogKeyMap(),
 	}
 
 	if hasComments {
@@ -106,19 +130,19 @@ func (d *ReviewDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (d *ReviewDialog) updateSelect(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, key.NewBinding(key.WithKeys("q", "esc", "ctrl+c"))):
+	case key.Matches(msg, d.keymap.Exit):
 		d.result.Action = ReviewActionExit
 		d.quitting = true
 		return d, tea.Quit
-	case key.Matches(msg, key.NewBinding(key.WithKeys("j", "down"))):
+	case key.Matches(msg, d.keymap.Down):
 		if d.cursor < len(d.options)-1 {
 			d.cursor++
 		}
-	case key.Matches(msg, key.NewBinding(key.WithKeys("k", "up"))):
+	case key.Matches(msg, d.keymap.Up):
 		if d.cursor > 0 {
 			d.cursor--
 		}
-	case key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
+	case key.Matches(msg, d.keymap.Select):
 		action := d.actions[d.cursor]
 		if action == ReviewActionExit {
 			d.result.Action = ReviewActionExit
@@ -135,11 +159,11 @@ func (d *ReviewDialog) updateSelect(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (d *ReviewDialog) updateBody(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case key.Matches(msg, key.NewBinding(key.WithKeys("esc"))):
+	case key.Matches(msg, d.keymap.Back):
 		d.mode = dialogModeSelect
 		d.textarea.Blur()
 		return d, nil
-	case key.Matches(msg, key.NewBinding(key.WithKeys("ctrl+s"))):
+	case key.Matches(msg, d.keymap.Save):
 		d.result.Body = strings.TrimSpace(d.textarea.Value())
 		d.quitting = true
 		return d, tea.Quit

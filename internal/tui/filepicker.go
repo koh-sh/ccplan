@@ -15,6 +15,28 @@ type FilePickerResult struct {
 	Cancelled     bool
 }
 
+// filePickerKeyMap holds the file picker's key bindings, built once at
+// construction like App's KeyMap rather than on every key press.
+type filePickerKeyMap struct {
+	Cancel    key.Binding
+	Confirm   key.Binding
+	Down      key.Binding
+	Up        key.Binding
+	Toggle    key.Binding
+	ToggleAll key.Binding
+}
+
+func newFilePickerKeyMap() filePickerKeyMap {
+	return filePickerKeyMap{
+		Cancel:    key.NewBinding(key.WithKeys("q", "esc")),
+		Confirm:   key.NewBinding(key.WithKeys("enter")),
+		Down:      key.NewBinding(key.WithKeys("j", "down")),
+		Up:        key.NewBinding(key.WithKeys("k", "up")),
+		Toggle:    key.NewBinding(key.WithKeys("space")),
+		ToggleAll: key.NewBinding(key.WithKeys("a")),
+	}
+}
+
 // FilePicker is a Bubble Tea model for selecting files from a list.
 type FilePicker struct {
 	files        []string
@@ -25,6 +47,7 @@ type FilePicker struct {
 	height       int
 	result       FilePickerResult
 	quitting     bool
+	keymap       filePickerKeyMap
 }
 
 // NewFilePicker creates a file picker with the given file list.
@@ -37,6 +60,7 @@ func NewFilePicker(files []string) *FilePicker {
 	return &FilePicker{
 		files:    files,
 		selected: selected,
+		keymap:   newFilePickerKeyMap(),
 	}
 }
 
@@ -60,12 +84,12 @@ func (fp *FilePicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		switch {
-		case key.Matches(msg, key.NewBinding(key.WithKeys("q", "esc"))):
+		case key.Matches(msg, fp.keymap.Cancel):
 			fp.result.Cancelled = true
 			fp.quitting = true
 			return fp, tea.Quit
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
+		case key.Matches(msg, fp.keymap.Confirm):
 			var selected []string
 			for i, f := range fp.files {
 				if fp.selected[i] {
@@ -76,22 +100,22 @@ func (fp *FilePicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			fp.quitting = true
 			return fp, tea.Quit
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("j", "down"))):
+		case key.Matches(msg, fp.keymap.Down):
 			if fp.cursor < len(fp.files)-1 {
 				fp.cursor++
 				fp.ensureVisible()
 			}
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("k", "up"))):
+		case key.Matches(msg, fp.keymap.Up):
 			if fp.cursor > 0 {
 				fp.cursor--
 				fp.ensureVisible()
 			}
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("space"))):
+		case key.Matches(msg, fp.keymap.Toggle):
 			fp.selected[fp.cursor] = !fp.selected[fp.cursor]
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("a"))):
+		case key.Matches(msg, fp.keymap.ToggleAll):
 			allSelected := fp.allSelected()
 			for i := range fp.files {
 				fp.selected[i] = !allSelected
