@@ -4,7 +4,7 @@ go 1.26.3
 
 require (
 	charm.land/bubbles/v2 v2.2.0
-	charm.land/bubbletea/v2 v2.0.8
+	charm.land/bubbletea/v2 v2.0.9
 	charm.land/glamour/v2 v2.0.1
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/AlexanderGrooff/mermaid-ascii v0.0.0-20260819200233-aa31760e14e3
