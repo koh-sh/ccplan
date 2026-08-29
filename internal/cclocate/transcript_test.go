@@ -3,179 +3,118 @@ package cclocate
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
 
+// fixturePlansDir is the plansDirectory the testdata transcripts refer to.
+const fixturePlansDir = "/tmp/test-plans"
+
+// writeTranscript writes content as a transcript file in a temp dir and
+// returns its path.
+func writeTranscript(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "transcript.jsonl")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 func TestFindPlanFilesInTranscript(t *testing.T) {
-	transcriptPath := filepath.Join("testdata", "transcript-with-plan.jsonl")
-	plansDir := "/tmp/test-plans"
+	tmpPlans := filepath.Join(t.TempDir(), "plans")
+	fixture := func(name string) string { return filepath.Join("testdata", name) }
+	plan := func(name string) string { return filepath.Join(fixturePlansDir, name) }
 
-	paths, err := findPlanFilesInTranscript(transcriptPath, plansDir, false)
-	if err != nil {
-		t.Fatalf("findPlanFilesInTranscript() error: %v", err)
+	tests := []struct {
+		name       string
+		transcript string
+		plansDir   string
+		all        bool
+		want       []string
+		wantErr    string
+	}{
+		{
+			name:       "latest plan",
+			transcript: fixture("transcript-with-plan.jsonl"),
+			plansDir:   fixturePlansDir,
+			want:       []string{plan("jaunty-petting-nebula.md")},
+		},
+		{
+			name:       "no plan written",
+			transcript: fixture("transcript-no-plan.jsonl"),
+			plansDir:   fixturePlansDir,
+		},
+		{
+			name:       "multiple plans returns latest only",
+			transcript: fixture("transcript-multiple-plans.jsonl"),
+			plansDir:   fixturePlansDir,
+			want:       []string{plan("plan-b.md")},
+		},
+		{
+			name:       "multiple plans with all returns newest first",
+			transcript: fixture("transcript-multiple-plans.jsonl"),
+			plansDir:   fixturePlansDir,
+			all:        true,
+			want:       []string{plan("plan-b.md"), plan("plan-a.md")},
+		},
+		{
+			name:       "malformed lines are skipped",
+			transcript: fixture("transcript-malformed.jsonl"),
+			plansDir:   fixturePlansDir,
+			all:        true,
+			want:       []string{plan("valid.md")},
+		},
+		{
+			name:       "plans under another directory are ignored",
+			transcript: fixture("transcript-with-plan.jsonl"),
+			plansDir:   "/some/other/dir",
+		},
+		{
+			name:       "nonexistent transcript",
+			transcript: filepath.Join(t.TempDir(), "missing.jsonl"),
+			plansDir:   fixturePlansDir,
+			wantErr:    "no such file",
+		},
+		{
+			name: "empty lines are skipped",
+			transcript: writeTranscript(t, "\n"+
+				`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":{"file_path":"`+filepath.Join(tmpPlans, "plan.md")+`"}}]}}`+"\n"+
+				"\n\n"),
+			plansDir: tmpPlans,
+			all:      true,
+			want:     []string{filepath.Join(tmpPlans, "plan.md")},
+		},
+		{
+			name:       "invalid content block is skipped",
+			transcript: writeTranscript(t, `{"type":"assistant","message":{"role":"assistant","content":["not a valid block"]}}`+"\n"),
+			plansDir:   tmpPlans,
+			all:        true,
+		},
+		{
+			name:       "invalid tool input is skipped",
+			transcript: writeTranscript(t, `{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":"not-an-object"}]}}`+"\n"),
+			plansDir:   tmpPlans,
+			all:        true,
+		},
 	}
-
-	if len(paths) != 1 {
-		t.Fatalf("len(paths) = %d, want 1", len(paths))
-	}
-
-	want := filepath.Clean("/tmp/test-plans/jaunty-petting-nebula.md")
-	if paths[0] != want {
-		t.Errorf("paths[0] = %q, want %q", paths[0], want)
-	}
-}
-
-func TestFindPlanFilesNoPlan(t *testing.T) {
-	transcriptPath := filepath.Join("testdata", "transcript-no-plan.jsonl")
-	plansDir := "/tmp/test-plans"
-
-	paths, err := findPlanFilesInTranscript(transcriptPath, plansDir, false)
-	if err != nil {
-		t.Fatalf("findPlanFilesInTranscript() error: %v", err)
-	}
-
-	if len(paths) != 0 {
-		t.Errorf("len(paths) = %d, want 0", len(paths))
-	}
-}
-
-func TestFindPlanFilesMultiplePlans(t *testing.T) {
-	transcriptPath := filepath.Join("testdata", "transcript-multiple-plans.jsonl")
-	plansDir := "/tmp/test-plans"
-
-	// Latest only
-	paths, err := findPlanFilesInTranscript(transcriptPath, plansDir, false)
-	if err != nil {
-		t.Fatalf("findPlanFilesInTranscript() error: %v", err)
-	}
-	if len(paths) != 1 {
-		t.Fatalf("len(paths) = %d, want 1", len(paths))
-	}
-	want := filepath.Clean("/tmp/test-plans/plan-b.md")
-	if paths[0] != want {
-		t.Errorf("latest path = %q, want %q", paths[0], want)
-	}
-
-	// All
-	allPaths, err := findPlanFilesInTranscript(transcriptPath, plansDir, true)
-	if err != nil {
-		t.Fatalf("findPlanFilesInTranscript(all) error: %v", err)
-	}
-	if len(allPaths) != 2 {
-		t.Fatalf("len(allPaths) = %d, want 2", len(allPaths))
-	}
-	// Reverse order since we scan backwards
-	if allPaths[0] != filepath.Clean("/tmp/test-plans/plan-b.md") {
-		t.Errorf("allPaths[0] = %q, want plan-b.md", allPaths[0])
-	}
-	if allPaths[1] != filepath.Clean("/tmp/test-plans/plan-a.md") {
-		t.Errorf("allPaths[1] = %q, want plan-a.md", allPaths[1])
-	}
-}
-
-func TestFindPlanFilesMalformed(t *testing.T) {
-	transcriptPath := filepath.Join("testdata", "transcript-malformed.jsonl")
-	plansDir := "/tmp/test-plans"
-
-	paths, err := findPlanFilesInTranscript(transcriptPath, plansDir, true)
-	if err != nil {
-		t.Fatalf("findPlanFilesInTranscript() error: %v", err)
-	}
-
-	// Should find the valid line and skip malformed ones
-	if len(paths) != 1 {
-		t.Fatalf("len(paths) = %d, want 1", len(paths))
-	}
-}
-
-func TestFindPlanFilesWrongDir(t *testing.T) {
-	transcriptPath := filepath.Join("testdata", "transcript-with-plan.jsonl")
-	plansDir := "/some/other/dir"
-
-	paths, err := findPlanFilesInTranscript(transcriptPath, plansDir, false)
-	if err != nil {
-		t.Fatalf("findPlanFilesInTranscript() error: %v", err)
-	}
-
-	if len(paths) != 0 {
-		t.Errorf("len(paths) = %d, want 0 (wrong plansDir)", len(paths))
-	}
-}
-
-func TestFindPlanFilesNonExistent(t *testing.T) {
-	_, err := findPlanFilesInTranscript("/nonexistent/file.jsonl", "/tmp", false)
-	if err == nil {
-		t.Fatal("expected error for nonexistent file")
-	}
-	if !strings.Contains(err.Error(), "no such file") {
-		t.Errorf("error = %q, want to contain 'no such file'", err.Error())
-	}
-}
-
-func TestFindPlanFilesWithEmptyLines(t *testing.T) {
-	// Transcript with empty lines between entries
-	tmpDir := t.TempDir()
-	transcriptFile := filepath.Join(tmpDir, "transcript.jsonl")
-
-	plansDir := filepath.Join(tmpDir, "plans")
-	if err := os.MkdirAll(plansDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	content := "\n" + // empty line at start
-		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":{"file_path":"` + filepath.Join(plansDir, "plan.md") + `"}}]}}` + "\n" +
-		"\n" + // empty line in middle
-		"\n" // empty line at end
-	if err := os.WriteFile(transcriptFile, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	paths, err := findPlanFilesInTranscript(transcriptFile, plansDir, true)
-	if err != nil {
-		t.Fatalf("findPlanFilesInTranscript() error: %v", err)
-	}
-	if len(paths) != 1 {
-		t.Errorf("len(paths) = %d, want 1", len(paths))
-	}
-}
-
-func TestFindPlanFilesWithBadContentBlock(t *testing.T) {
-	// Content block with invalid JSON in the raw content
-	tmpDir := t.TempDir()
-	transcriptFile := filepath.Join(tmpDir, "transcript.jsonl")
-
-	// content array has an invalid JSON element
-	content := `{"type":"assistant","message":{"role":"assistant","content":["not a valid block"]}}` + "\n"
-	if err := os.WriteFile(transcriptFile, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	paths, err := findPlanFilesInTranscript(transcriptFile, filepath.Join(tmpDir, "plans"), true)
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-	if len(paths) != 0 {
-		t.Errorf("expected 0 paths for invalid content block, got %d", len(paths))
-	}
-}
-
-func TestFindPlanFilesWithBadInput(t *testing.T) {
-	// Tool use with invalid JSON in the input field
-	tmpDir := t.TempDir()
-	transcriptFile := filepath.Join(tmpDir, "transcript.jsonl")
-
-	content := `{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","input":"not-an-object"}]}}` + "\n"
-	if err := os.WriteFile(transcriptFile, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	paths, err := findPlanFilesInTranscript(transcriptFile, filepath.Join(tmpDir, "plans"), true)
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
-	if len(paths) != 0 {
-		t.Errorf("expected 0 paths for invalid input field, got %d", len(paths))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := findPlanFilesInTranscript(tt.transcript, tt.plansDir, tt.all)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error = %v, want containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("findPlanFilesInTranscript() error: %v", err)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("paths = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 
