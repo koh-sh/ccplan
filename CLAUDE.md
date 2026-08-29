@@ -45,7 +45,7 @@ Linter config: `.golangci.yml` (enabled: asciicheck, gocritic, misspell, nolintl
 ### Package Layout
 
 - **`internal/markdown/`** — Core domain. Markdown parsing via goldmark AST (not regex, to avoid `#` in code blocks being misinterpreted as headings). Data models (`Document`, `Section`, `ReviewComment`), review output formatting.
-- **`internal/tui/`** — Bubble Tea TUI. 2-pane layout: `SectionList` (left) + `DetailPane` (right). Mode-based state machine: `ModeNormal` → `ModeComment` → `ModeCommentList` → `ModeConfirm` → `ModeHelp` → `ModeSearch`.
+- **`internal/tui/`** — Bubble Tea TUI. 2-pane layout: `SectionList` (left) + `DetailPane` (right). Mode-based state machine: `ModeNormal` → `ModeComment` → `ModeCommentList` → `ModeConfirm` → `ModeHelp` → `ModeSearch` → `ModeLineSelect` (visual line selection in raw view).
 - **`internal/cclocate/`** — Plan file discovery from Claude Code transcript JSONL files. `plansDirectory` resolution chain: `.claude/settings.local.json` → `.claude/settings.json` → `~/.claude/settings.json` → `~/.claude/plans/`.
 - **`internal/cchook/`** — Claude Code hook orchestration. Parses stdin JSON, validates `permission_mode == "plan"`, resolves the plan file (`PreToolUse`/`ExitPlanMode`: injected `tool_input.planFilePath`; `PostToolUse`/`Write|Edit`: `file_path` under `plansDirectory`), spawns review in a pane, returns exit code 0 (continue) or 2 (feedback / deny ExitPlanMode).
 - **`internal/diff/`** — Unified diff parsing (`ParsePatch`, `StripHeader`, `AddedFilePatch`) shared by PR mode and local diff mode. Source-agnostic.
