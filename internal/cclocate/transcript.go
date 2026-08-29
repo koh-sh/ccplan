@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 // transcriptMessage represents a single line in the transcript JSONL.
@@ -54,8 +55,7 @@ func findPlanFilesInTranscript(transcriptPath, plansDir string, all bool) ([]str
 	seen := make(map[string]bool)
 
 	// Scan backwards to find latest first
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := lines[i]
+	for _, line := range slices.Backward(lines) {
 		if line == "" {
 			continue
 		}
